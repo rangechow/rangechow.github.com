@@ -28,6 +28,10 @@ pre {
   font: italic 16px "Comic Sans MS", cursive;
 }
 
+a:visited {
+  color: black;
+}
+
 #whole-body {
 	min-width: 966px;
 	overflow:scroll;
