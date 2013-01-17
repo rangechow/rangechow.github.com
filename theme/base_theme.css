@@ -30,6 +30,7 @@ pre {
 
 :link,:visited {
   text-decoration:none;
+  color: black;
 }
 
 #whole-body {
