@@ -33,6 +33,10 @@ pre {
   color: black;
 }
 
+:hover {
+  text-decoration-line: underline;
+}
+
 #whole-body {
 	min-width: 966px;
 	overflow:scroll;
