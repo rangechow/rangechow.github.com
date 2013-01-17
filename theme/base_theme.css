@@ -2,12 +2,12 @@
 
 @font-face {
   font-family: Helvetica;
-  src: url(/ttf/Helvetica.Ttf);
+  src: url(ttf/Helvetica.Ttf);
 }
 
 @font-face{
   font-family: "长城细圆体";
-  src: url(/ttf/ccxyt.ttf);
+  src: url(ttf/ccxyt.ttf);
 }
 
 /* CSS Document */
@@ -126,7 +126,7 @@ div.page-body {
 	position: relative;
 	width: 100%;
 	border-bottom: 1px solid #ccc;
-	font: normal 18px Helvetica, "长城细圆体";
+	font: normal 18px Helvetica, "长城细圆体", "";
   padding: 15px;
 }
 
