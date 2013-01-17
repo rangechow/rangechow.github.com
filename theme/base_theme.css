@@ -33,8 +33,7 @@ pre {
   color: black;
 }
 
-:hover {
-  text-decoration-line: underline;
+a:hover {
   border-bottom:1px solid black;
 }
 
