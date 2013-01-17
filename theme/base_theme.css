@@ -28,8 +28,8 @@ pre {
   font: italic 16px "Comic Sans MS", cursive;
 }
 
-a:visited {
-  color: black;
+:link,:visited {
+  text-decoration:none;
 }
 
 #whole-body {
