@@ -35,6 +35,7 @@ pre {
 
 :hover {
   text-decoration-line: underline;
+  border-bottom:1px solid black;
 }
 
 #whole-body {
