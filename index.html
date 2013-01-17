@@ -1,0 +1,21 @@
+---
+layout: default
+---
+
+<ul>
+  {% for post in site.posts %}
+  {% assign post=site.posts.first %}
+  {% assign content=post.content %}
+  {% if post.title %}
+  <li class="index">
+  {{ post.date | date: '%d %B,%Y' }} &raquo;
+  <a href="{{ site.baseurl }} {{ post.url }}">
+    {{ post.title }}
+  </a>
+  </li>
+  {% endif %}
+  {% endfor %}
+
+</ul>
+
+
