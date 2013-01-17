@@ -2,12 +2,12 @@
 
 @font-face {
   font-family: Helvetica;
-  src: url(ttf/Helvetica.Ttf);
+  src: url(/ttf/Helvetica.Ttf);
 }
 
 @font-face{
   font-family: "长城细圆体";
-  src: url(ttf/ccxyt.ttf);
+  src: url(/ttf/ccxyt.ttf);
 }
 
 /* CSS Document */
