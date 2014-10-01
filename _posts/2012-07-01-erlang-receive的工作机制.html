@@ -1,0 +1,10 @@
+---
+layout: post
+title: erlang Receive的工作机制
+---
+
+
+                        
+                        <div>receive works as follows:</div><div>1. When we enter a receive statement, we start a timer (but only if an&nbsp;after section is present in the expression).</div><div>2. Take the first message in the mailbox and try to match it against&nbsp;Pattern1, Pattern2, and so on. If the match succeeds, the message&nbsp;is removed from the mailbox, and the expressions following the&nbsp;pattern are evaluated.</div><div>3. If none of the patterns in the receive statement matches the first&nbsp;message in the mailbox, then the first message is removed from&nbsp;the mailbox and put into a &#8220;save queue.&#8221; The second message&nbsp;in the mailbox is then tried. This procedure is repeated until a&nbsp;matching message is found or until all the messages in the mailbox&nbsp;have been examined.</div><div><div>4. If none of the messages in the mailbox matches, then the process&nbsp;is suspended and will be rescheduled for execution the next time a&nbsp;new message is put in the mailbox. Note that when a new message&nbsp;arrives, the messages in the save queue are not rematched; only&nbsp;the new message is matched.</div><div>5. As soon as a message has been matched, then all messages that&nbsp;have been put into the save queue are reentered into the mailbox&nbsp;in the order in which they arrived at the process. If a timer was&nbsp;set, it is cleared.</div><div>6. If the timer elapses when we are waiting for a message, then evaluate&nbsp;the expressions ExpressionsTimeout and put any saved messages&nbsp;back into the mailbox in the order in which they arrived at the&nbsp;process.</div></div><img src ="http://www.cppblog.com/range/aggbug/181020.html" width = "1" height = "1" /><br><br><div align=right><a style="text-decoration:none;" href="http://www.cppblog.com/range/" target="_blank">Range</a> 2012-07-01 17:17 <a href="http://www.cppblog.com/range/archive/2012/07/01/181020.html#Feedback" target="_blank" style="text-decoration:none;">发表评论</a></div>
+                                
+                            
