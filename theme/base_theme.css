@@ -12,11 +12,10 @@ ul,ol,li,dl,dt,dd,
 form,fieldset,input,textarea,
 h1,h2,h3,h4,h5,h6,pre,code,p,blockquote,hr,
 th,td {
-    margin:0;
-    padding:0;
+    margin:2px;
+    padding:3px;
 }
 h1,h2,h3,h4,h5,h6 {
-    font-weight:normal;
 }
 table {
     border-spacing:0;
