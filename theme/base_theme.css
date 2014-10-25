@@ -22,13 +22,18 @@ h1 {
 h2 {
     margin-top:15px;
     margin-bottom:15px;
+    margin-left:12px;
 }
 h3 {
     margin-top:12px;
     margin-bottom:12px;
+    margin-left:15px;
 }
 p {
-    margin-left:12px;
+    margin-left:18px;
+}
+ul {
+    margin-left:28px;
 }
 table {
     border-spacing:0;
