@@ -7,8 +7,7 @@ title: '从docker了解linux container'
  
  
  
-什么是docker？
-===
+## 什么是docker？
  
 
 docker是为研发和运维搭建的构建、迁移、运行分布式程序的平台，能快速的搭建分布式系统，消除研发，测试和生产环境的差异。
@@ -30,17 +29,16 @@ docker的操作和EC2等类似，首先在一台部署好的机器上生成一�
  
  
  
-docker和虚拟机比较有何优点？ 
-===
+##docker和虚拟机比较有何优点？ 
  
  
-## 虚拟机 ##
+### 虚拟机 ##
  
 ![]({{site.baseurl}}/img/3.png)
  
 每个虚拟机实例至少包含数GB，磁盘利用率低。启动实例时，先要启动VM，启动耗时较长。隔离性完整。
  
-## docker ##
+### docker ###
  
 ![]({{site.baseurl}}/img/4.png)
  
@@ -48,11 +46,10 @@ docker和虚拟机比较有何优点？
  
  
  
-docker采用了什么技术？ 
-===
+##docker采用了什么技术？ 
  
  
-## namespace ##
+### namespace ###
  
 namespace是轻量级的进程虚拟化。主要的开发人员是 Eric Biederman，第一阶段的用户态namespace已经合入了linux 2.6.23。从linux 3.8开始，非root权限的进程可以创建自己的用户态namespace，从而获得对应完整的root权限。目前实现了六种namespace，包括
  
@@ -138,7 +135,7 @@ namespace由一个唯一的inode号标识，在linux 3.8后的版本可以通过
 不同类型的namespace具体的实现方式不一样。大致的原理是通过对比相应的资源中namespace来判断此进程是否有该资源的权限。
  
  
-## cgroup ##
+### cgroup ###
  
  
 cgroup提供了聚合和划分进程和他们的子进程到不同等级的进程组里的机制。cgroup的思想很简单，即划分进程到不同等级的进程组里，然后给这些进程组提供独立的系统资源。这项目由google的工程师Paul Menage和Rohit Seth发起，现在的维护者是Li Zefan和Tehun Heo。ps.Li Zefan是华为的工程师喔！
@@ -166,7 +163,7 @@ cgroup提供了聚合和划分进程和他们的子进程到不同等级的进�
 从cgroup的实现来看，其实cgroup是一种虚拟的文件系统(VFS)。cgroup的信息是随内核存在，当系统重启，所有的cgroup信息将被删除。
  
  
-## LXC ##
+### LXC ###
  
  
 LXC(linux containers)是linux kernel容器特性的用户态接口， 它集成了多个kernel的特性，包括
@@ -184,12 +181,12 @@ LXC(linux containers)是linux kernel容器特性的用户态接口， 它集成�
    
    
    
-#总结     
+##总结     
     
 docker是基于LXC采用go语言编写的服务。docker已经构建出类似EC2从构建，迁移，存储，分发的一整套服务。docker的创始人Solomon Hykes甚至宣称，docker能将互联网升级至下一代。这里的互联网应该特指云计算。因为google基础架构部副总裁也说，我们和docker联手，把容器技术打造为所有云应用的基石。我打开docker的github，发现docker完全由go编写，确实震惊的好一会，我猜想这也是为什么docker能等到google这种大厂商支持的原因之一。看来VC取代VM已经是大势所趋，基于资源的隔离比基于内核的隔离能更好的控制实例所能获取的资源，在粒度级别更低的层级控制资源，能更大的发挥物理机器的性能。    
         
    
-#参考文献    
+##参考文献    
 
 
       
