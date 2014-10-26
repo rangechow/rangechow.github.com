@@ -20,7 +20,7 @@ docker engine采用了CS架构，包括
 * deamon 运行在主机里，不直接与用户交互，管理和运行container。
 * client 接收用户指令，从而构建，分发，运行docker容器。
  
-![]()
+![]({{site.baseurl}}/img/5.png)
  
 
 在docker内部，主要由三个模块：
