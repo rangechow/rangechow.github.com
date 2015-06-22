@@ -46,12 +46,16 @@ fieldset,img,abbr,acronym {
     border:0;
 } 
 
-code {
+pre {
   width: 92%;
   background-color: #D3DBDE;
   padding: 16px;
   margin: 12px;
   font: 16px "Comic Sans MS", cursive;
+}
+
+code {
+	background-color: #D3DBDE;
 }
 
 :link,:visited {
