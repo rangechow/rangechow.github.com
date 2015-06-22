@@ -1,8 +1,8 @@
 @charset "utf-8";
 
 @font-face {
-  font-family: MFYanSong_Noncommercial-Regular;
-  src: url(ttf/MFYanSong_Noncommercial-Regular.otf);
+  font-family: Helvetica;
+  src: url(ttf/Helvetica.Ttf);
 }
 
 /* CSS Document */
@@ -141,32 +141,32 @@ div.page-body {
 	position: relative;
 	width: 100%;
 	border-bottom: 1px solid #ccc;
-	font: normal 18px MFYanSong_Noncommercial-Regular;
+	font: normal 18px ;
   padding: 15px;
 }
 
 h3.footer-info {
-	font: normal 12px MFYanSong_Noncommercial-Regular;
+	font: normal 12px Helvetica;
 }
 
 h1.header-name {
-	font: bolder 52px MFYanSong_Noncommercial-Regular;
+	font: bolder 52px Helvetica;
 }
 
 h2.header-description {
-	font: normal 18px MFYanSong_Noncommercial-Regular;
+	font: normal 18px Helvetica;
 }
 
 h2.page-title {
-  font: bolder 32px MFYanSong_Noncommercial-Regular;
+  font: bolder 32px Helvetica;
 }
 
 h2.page-date {
-   font: normal 16px MFYanSong_Noncommercial-Regular;
+   font: normal 16px Helvetica;
  }
 
 .index {
 	margin: 12px;	
-	font: normal 18px MFYanSong_Noncommercial-Regular;
+	font: normal 18px Helvetica;
 	 
 }
