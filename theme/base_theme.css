@@ -51,7 +51,7 @@ pre {
   background-color: #D3DBDE;
   padding: 16px;
   margin: 12px;
-  font: italic 16px "Comic Sans MS", cursive;
+  font: 16px "Comic Sans MS", cursive;
 }
 
 :link,:visited {
@@ -142,7 +142,8 @@ div.page-body {
 	width: 100%;
 	border-bottom: 1px solid #ccc;
 	font: normal 18px ;
-  padding: 15px;
+  	padding: 15px;
+  	line-height:160%;
 }
 
 h3.footer-info {
