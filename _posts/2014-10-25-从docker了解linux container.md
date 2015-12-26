@@ -1,6 +1,7 @@
 ---
 layout: post
 title: '从docker了解linux container'
+tags: 服务端技术
 ---
 
 4年前当我第一次接触eucalyptus、EC2，认识云计算的时候就坚定的认为虚拟化技术是未来的趋势。Image可以快速复制，迁移，部署，这对研发还是运维来说都是十分便利的事情。尤其是可以在几分钟启动成百上千个instance，服务弹性性能，是多么美好的一件事。当时XEN、KVM都是业界最前沿的项目。如今虚拟化技术飞速发展，方向已经从Virtual Machine转移到Virtual Container了。最近基于lxc的docker着实火了，新闻铺天盖地的报道。下面我们就从docker来了解下Virtual Container。

@@ -2,20 +2,60 @@
 layout: default
 ---
 
-<ul>
-  {% for post in site.posts %}
-  {% assign post=site.posts.first %}
-  {% assign content=post.content %}
-  {% if post.title %}
-  <li class="index">
-  {{ post.date | date: '%d %B,%Y' }} &raquo;
-  <a href="{{ site.baseurl }} {{ post.url }}">
-    {{ post.title }}
-  </a>
-  </li>
-  {% endif %}
-  {% endfor %}
+<div id="main" class="autopagerize_page_element" role="main">
+    {% for post in paginator.posts %}
+    <article class="post sample text">
+        <div class="date">
+            <p><a href="{{ post.url | prepend: site.baseurl }}">{{ post.date | date: "%b %-d, %Y" }}</a></p>
+        </div>
 
-</ul>
+        <header class="entry-header">
+            <h1 class="entry-title">
+                <a href="{{ post.url | prepend: site.baseurl }}">{{ post.title }}</a>
+            </h1>
+        </header>
+        <div class="entry-content">
+            {{ post.content }}
+        </div>
+         <footer class="entry-footer" role="contentinfo">
+            Tags:
+            <span class="meta-elements hastags">
+                {% for tag in post.tags %}
+                    <a href="/tags/{{ tag }}/">{{ tag }}</a>
+                {% endfor %}
+            </span>
+        </footer>
+    </article>
+    {% endfor %}
+    <!--
+    <div class="pagenation pagenation-index">
+        {% if paginator.previous_page %}
+            {% if paginator.previous_page == 1 %}
+                <a href="/">Previous</a> 
+            {% else %}
+                <a href="{{ paginator.previous_page_path }}">Previous</a> 
+            {% endif %} 
+       
+        {% endif %} 
+        
+        {% if paginator.page == 1 %}
+            <span class="current-page">1</span>
+        {% else %}
+            <a class="jump-page" href="/">1</a> 
+        {% endif %} 
+        
+        {% for count in (2..paginator.total_pages) %} 
+            {% if count == paginator.page %}
+                <span class="current-page">{{ count }}</span>
+            {% else %}
+                <a class="jump-page" href="/page{{ count }}">{{ count }}</a>
+            {% endif %} 
+        {% endfor %} 
+        
+        {% if paginator.next_page %}
+            <a href="{{ paginator.next_page_path }}" class="next" rel="next">Next</a> 
+        {% endif %}
 
-
+    </div>
+    -->
+</div>

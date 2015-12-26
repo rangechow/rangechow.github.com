@@ -1,0 +1,23 @@
+---
+layout: default
+---
+<h2 class="tagged">分类： {{ page.tag }}</h2>
+
+
+<div id="main" class="autopagerize_page_element" role="main">
+    
+    <article class="post sample text">
+        {% for post in site.tags[page.tag] %}
+        <div class="date">
+            <p><a href="{{ post.url | prepend: site.baseurl }}">{{ post.date | date: "%b %-d, %Y" }}</a></p>
+        </div>
+
+        <header class="entry-header">
+            <h1 class="entry-title">
+                <a href="{{ post.url | prepend: site.baseurl }}">{{ post.title }}</a>
+            </h1>
+        </header>
+        {% endfor %}
+    </article> 
+    
+</div>
