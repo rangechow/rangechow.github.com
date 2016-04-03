@@ -1,62 +1,644 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html>
+
   <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <link rel="stylesheet" href="/theme/base_theme.css" type="text/css" />
-    <title></title>
-  </head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="rangechow">
+  <meta name="description" content="自律，坚持
+">
 
-  <body id="whole-body">
+  <title>RangeChow</title>
+ 
+  <link rel="stylesheet" href="/css/zen.css">
+  <link rel="canonical" href="http://www.rangechow.com/">
+  <link rel="alternate" type="application/rss+xml" title="RangeChow" href="http://www.rangechow.com/feed.xml">
+
+  <script src="/js/zen-js.min.js"></script>
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-71759796-1', 'auto');
+  ga('send', 'pageview');
+
+  </script>
+</head>
+
+
+  <body>
     <div id="container">
-      <div id="container-header">
-        <div id="container-header-content">
-          <h1 class="header-name">zhouzhouyuanyuan</h1>
-          <h2 class="header-description">记录经历,封存回忆.</h2>
-        </div>
-      </div>
-      <div id="container-body">
-        <div id="container-body-left">
+      <div class="mobile-nav-panel">
+  <i class="icon-reorder icon-large"></i>
+</div>
 
-          <img src="/img/1.jpg" /><br /><br />
+<nav class="nav" role="navigation">
+  <ul>
+    <li>
+      <a href="/">Home</a>
+    </li>
+    <li>
+      <a href="/archive.html">Archive</a>
+    </li>
+     
+    <li>
+      <a class="page-link" href="/about/">About Me</a>
+    </li>
+                       
+    <li>
+        <a href="/feed.xml">RSS</a>
+    </li>
+  </ul>
+</nav>
 
-          <div class="widget-content">
-            <p class="index">Contact Info</p>
-          </div>
-          <div class="widget-content">
-            <p class="index">周原</p>
-            <p class="index">腾讯 工程师</p>
-            <p class="index">homelandbibi@gmail.com</p>
-          </div>
+<header id="header" role="banner">
+  <h1 class="blog-title">
+    <a href="/">RangeChow</a>
+  </h1>
+  <h2 class="blog-description">自律，坚持
+</h2>
+</header>
+      <div id="main" class="autopagerize_page_element" role="main">
+    
+    <article class="post sample text">
+        <div class="date">
+            <p><a href="/2015/06/22/%E8%AF%91%E6%96%87-Nginx%E5%8A%A0%E5%85%A5%E7%BA%BF%E7%A8%8B%E6%B1%A0%E7%89%B9%E6%80%A7-%E6%80%A7%E8%83%BD%E5%8F%AF%E6%8F%90%E5%8D%879%E5%80%8D.html">Jun 22, 2015</a></p>
         </div>
-        <div id="container-body-right">
-          <ul>
-  
-  
-  
-  
-  <li class="index">
-  16 January,2013 &raquo;
-  <a href=" /2013/01/16/HelloWorld.html">
-    hello world
-  </a>
+
+        <header class="entry-header">
+            <h1 class="entry-title">
+                <a href="/2015/06/22/%E8%AF%91%E6%96%87-Nginx%E5%8A%A0%E5%85%A5%E7%BA%BF%E7%A8%8B%E6%B1%A0%E7%89%B9%E6%80%A7-%E6%80%A7%E8%83%BD%E5%8F%AF%E6%8F%90%E5%8D%879%E5%80%8D.html">[译文]NGINX加入线程池特性，性能可提升9倍</a>
+            </h1>
+        </header>
+        <div class="entry-content">
+            <h2 id="section">介绍</h2>
+
+<p>NGINX采用异步、事件驱动的服务器架构来处理HTTP请求。与为每个HTTP请求创建或分配另一个服务进程/线程的传统服务器架构不同，NGINX使用非阻塞套接字和epoll/kqueue模式在一个工作进程中处理多个HTTP请求。而且NGINX的进程数量是一个非常小的常量，使用的内存不多，进程切换频率低，因此这种服务器架构可以同时处理上百万的模拟HTTP请求。</p>
+
+<p><img src="/img/622-1.png" alt="" /></p>
+
+<p>即便如此，异步、事件驱动的服务器架构仍不完美。产生缺陷的原因是：阻塞。不幸的是，很多NGINX的第三方模块使用阻塞调用，而用户并不了解这些特性，导致其NGINX服务性能严重下降。我们必须不惜一切代价避免阻塞。
+但是现阶段在NGINX官方代码里都不能做到完全没有阻塞调用。因此NGINX采用另一个方案来解决阻塞问题，这个方案就是“线程池”。线程池已经在NGINX版本1.7.11中实现。在介绍线程池前，我们先来聊聊阻塞。</p>
+
+<h2 id="section-1">阻塞</h2>
+
+<p>为了更好地理解这一问题，先简要介绍下NGINX的工作机制。
+总的来说，NGINX是事件处理程序，从内核读取链接产生的事件信息，然后告诉操作系统该如何处理。NGINX把所有繁重任务都交给操作系统，使NGINX可以快速、及时响应。</p>
+
+<p><img src="/img/622-2.png" alt="" /></p>
+
+<p>事件可以是超时、通知套接字读写数据、通知错误告警等。NGINX收到一堆的事件并放入处理队列中，然后一个接一个的处理它们。事件队列在进程的主循环中。在大多数情况下，事件处理非常快，也许只需要几个CPU周期。</p>
+
+<p><img src="/img/622-3.png" alt="" /></p>
+
+<p>如果有些事件处理非常耗时，将会导致什么情况发生呢？这个事件会一直在处理状态，直到完成后，主循环才能继续处理下一个事件。
+所以，阻塞意味着主循环将会被这个操作暂停一段较长的时间。阻塞操作有很多种，例如，CPU密集型计算、等待锁、磁盘IO、同步的网络操作等。关键是当进行阻塞操作时，工作进程不能处理其他事件，即使系统资源空闲。
+举个例子，有一队顾客正在排队向销售员购买商品。第一个顾客需要购买的商品在这间商店没有库存，于是销售员立马跑到仓库去取货。这个队伍的其他人将要等待两个小时才能购买商品，即使他们需要的商品就在商店中。你能想象后面的等待的人的表情吗？那会是非常烦躁不安的。</p>
+
+<p><img src="/img/622-4.png" alt="" /></p>
+
+<p>类似的情况同样会发生NGINX中。当读取的数据不在内存中，需要从磁盘的文件中获取。磁盘IO耗时几百个CPU周期，而队列中的其他事件需要的数据可能就在内存中，但是他们必须等待。结果大部分的请求的延迟增加，系统资源利用率下降。</p>
+
+<p><img src="/img/622-5.png" alt="" /></p>
+
+<p>有些操作系统，例如FreeBSD,提供读写文件的异步接口。NGINX就可以利用这些接口避免阻塞。并不是所有的Linux系统都提供这类接口。虽然Linux提供另一种读取文件的异步接口（译者注：这里应该是指<code class="highlighter-rouge">mmap</code>），但是这里有两个明显的坑。一个是需要把文件映射在内存中，另一个是文件描述符需要有<code class="highlighter-rouge">O_DIRECT</code>标记。第一个坑NGINX能很好处理，而第二个坑意味着文件的所有访问都会增加磁盘负载。显然这是不科学的。
+为了解决这个问题，NGINX 1.7.11版本引入了线程池技术。但是现在默认的NGINX Plus并没有包含这个特性，如果你有需要，请联系NGINX的销售顾问帮你构建包含线程池的NGINX Plus R6版本。</p>
+
+<h2 id="section-2">线程池</h2>
+
+<p>我们回到笨销售员的例子。这回销售员变聪明了，他叫了个快递去取仓库中的商品，并让这个顾客在一旁等待，继续处理后面顾客的购买请求。因此只有需要购买仓库中商品的顾客需要等待，其他顾客可以马上购买到他需要的商品。</p>
+
+<p><img src="/img/622-6.png" alt="" /></p>
+
+<p>在NGINX中，线程池的作用和快递类似。它由一个任务队列和几个工作线程组成。当工作进程需要处理事件有耗时的操作时，就把任务放进线程池的任务队列，然后这个任务就会被空闲的工作线程处理。</p>
+
+<p><img src="/img/622-7.jpg" alt="" /></p>
+
+<p>这个任务队列被一些特定的资源限制，可能会处理不过来。但是至少耗时的事件不会阻碍其他事件的处理。
+磁盘IO是阻塞操作最常见的例子。NGINX中的线程池可以处理任何不适合在工作进程主循环中处理的任务。
+现在，线程池中只实现了两个常见的操作，大多数系统中的<code class="highlighter-rouge">read()</code>系统调用和Linux系统中的<code class="highlighter-rouge">sendfile()</code>系统调用。NGINX将会继续在未来的版本中增加其他操作。</p>
+
+<h2 id="section-3">基准测试</h2>
+
+<p>实践是检验真理的唯一标准。我们将模拟阻塞和非阻塞的混合请求来对线程池的效率做基准测试。
+HTTP请求获取数据，但是数据不能全部缓存在内存中。测试机有48GB内存，我们在磁盘上生成了一共256GB的文件，每个文件4MB，然后配置NGINX 1.9.0。</p>
+<pre><code>
+worker_processes 16;
+
+events {
+    accept_mutex off;
+}
+
+http {
+    include mime.types;
+    default_type application/octet-stream;
+
+    access_log off;
+    sendfile on;
+    sendfile_max_chunk 512k;
+
+    server {
+        listen 8000;
+
+        location / {
+            root /storage;
+        }
+    }
+}	
+</code></pre>
+
+<p>为了达到最好的性能<code class="highlighter-rouge">logging</code>和<code class="highlighter-rouge">accept_mutex</code>已经被禁用,<code class="highlighter-rouge">sendfile</code>和<code class="highlighter-rouge">sendfile_max_chunk</code>被设置。<code class="highlighter-rouge">sendfile_max_chunk</code>可以减少<code class="highlighter-rouge">sendfile()</code>的耗时，因为NGINX每次只发送512KB的块。
+测试机有两个Intel Xeon E5645（12 cores，24 HT-threads in total）处理器，10Gbps网卡，有四块Western Digital WD1003FBYX硬盘，并组成RAID10阵列。操作系统是Ubuntu Server 14.04.1 LTS。</p>
+
+<p><img src="/img/622-9.jpg" alt="" /></p>
+
+<p>客户端有两台一样的测试机。其中一台并发200，请求随机的文件。这些请求可能会导致缓存未命中而产生磁盘IO。这台机器我们称为随机负载。另一台并发50，请求相同的文件。由于该文件频繁访问，会被缓存在内存中。NGINX可以快速处理这类请求，但是可能会被其他请求阻塞。这台机器我们称为常量负载。
+在服务器上使用ifstat监测性能。并在第二台测试机上使用WRK监测性能。</p>
+
+<p>没有线程池的版本性能一般，吞吐量为1Gbps。</p>
+
+<p><img src="/img/622-10.png" alt="" /></p>
+
+<p>top输出的信息显示工作线程都在阻塞状态。</p>
+
+<p><img src="/img/622-11.jpg" alt="" /></p>
+
+<p>吞吐量被磁盘IO限制，CPU大部分时间都处于空闲状态。
+WRK的结果非常糟糕。</p>
+
+<p><img src="/img/622-12.png" alt="" /></p>
+
+<p>常量负载请求的数据应该是从内存中获取，但是延迟非常大。这是由于所有的工作进程都在处理随机负载产生的磁盘IO。</p>
+
+<p>现在使用线程池版本测试。在配置的<code class="highlighter-rouge">location</code>块中加入<code class="highlighter-rouge">aio threads</code>。</p>
+<pre><code>
+location / {
+    root /storage;
+    aio threads;
+}	
+</code></pre>
+
+<p>测试结果</p>
+
+<p><img src="/img/622-14.jpg" alt="" /></p>
+
+<p>线程池的版本吞吐量为9.5Gbps！
+可能可以达到更高的吞吐量，但是9.5Gbps已经接近网卡的极限吞吐量。这个测试的瓶颈在网卡。
+top输出的信息显示工作线程都在休眠等待新的事件。</p>
+
+<p><img src="/img/622-15.jpg" alt="" /></p>
+
+<p>CPU大部分时间仍然处于空闲状态。
+WRK的结果显示平均延迟已经由7.42秒下降到226.32毫秒，速度提升33倍。每秒的请求由8上升到250，数量提升了31倍！</p>
+
+<p><img src="/img/622-16.jpg" alt="" /></p>
+
+<p>这结果是由于请求不再受到其他阻塞操作的影响。只要磁盘系统工作正常，随机负载就能得到很好的服务。NGINX使用剩下的资源来服务常量负载。</p>
+
+<h2 id="section-4">依旧没有银弹</h2>
+
+<p>如果NGINX中有阻塞操作和有提升性能的需求，你可能会迫不及待的使用线程池。但是先别急。</p>
+
+<p>NGINX中大部分<code class="highlighter-rouge">read()</code>和<code class="highlighter-rouge">sendfile()</code>操作不会产生过多的磁盘IO。如果你有足够的内存，操作系统会自动把访问频率高的文件缓存在内存中，我们称为页高速缓存。</p>
+
+<p>页高速缓存非常有效，使NGINX在大部分场景下有良好性能。页高速缓存中取数据十分快，如果使用线程池会有点多余。</p>
+
+<p>所以当你有足够的内存并且所处理的数据总量不大，NGINX在没有线程池的情况下已经可以很完美的工作了。</p>
+
+<p>只有在特定的场景下，才需要把<code class="highlighter-rouge">read()</code>交给线程池处理。当出现大量请求获取数据，但数据不能保存在系统的缓存中时，使用线程池会有明显的效果。最常见的例子就流媒体服务，这个和我们基准测试情况差不多。</p>
+
+<p>我们非常欣喜，能把<code class="highlighter-rouge">read()</code>操作交给线程池处理从而降低负载。判断是否使用线程池的标准是文件数据是否能保存在内存中。目前遇到的情况中，只有上面的例子需要使用线程池来处理<code class="highlighter-rouge">read()</code>事件。</p>
+
+<p>再说说刚刚的销售员例子。现在销售员不知道商品是否在商店中，因此他要么把每个商品都让快递员去取，要么都自己去取。</p>
+
+<p>问题的根源是操作系统忽略了这个特性的开发。在2010年Linux尝试加入<code class="highlighter-rouge">fincore()</code>系统调用，但是最终未能实现。之后数度尝试了在<code class="highlighter-rouge">preadv2()</code>中加入<code class="highlighter-rouge">RWF_NONBLOCK</code>标记。但是这些情况仍不明朗。内核还没加入这个特性的主要原因是拖延。</p>
+
+<p>FreeBSD已经有非常好的异步<code class="highlighter-rouge">read()</code>接口，因此不需要使用线程池。</p>
+
+<h2 id="section-5">配置线程池</h2>
+
+<p>你确定要使用线程池能提高NGINX性能，下面来介绍下线程池的配置。</p>
+
+<p>配置十分简单灵活。首先你需要使用NGINX 1.7.11版本或者之后的版本，带上<code class="highlighter-rouge">--with-threads</code>标志编译。在最简单的例子是在<code class="highlighter-rouge">http</code>、<code class="highlighter-rouge">server</code>或<code class="highlighter-rouge">location</code>块中加入<code class="highlighter-rouge">aio threads</code>。</p>
+<pre><code>
+aio threads;
+</code></pre>
+
+<p>这是最简单的线程池配置，其实是以下配置的简化版。</p>
+<pre><code>
+thread_pool default threads=32 max_queue=65536;
+aio threads=default;
+</code></pre>
+
+<p>配置定义了长度为65536的任务队列和32个工作线程。如果任务队列满载，NGINX会打印错误日志并拒接新的请求。</p>
+<pre><code>
+thread pool "NAME" queue overflow: N tasks waiting
+</code></pre>
+
+<p>出现错误日志，意味着HTTP请求的处理速度已经远远低于HTTP请求增加的速度，你可以考虑增加工作线程，如果这样也不能解决问题，说明你的系统已经不能承载这么大量的HTTP请求。</p>
+
+<p>使用<code class="highlighter-rouge">thread_pool</code>标记，你可以配置工作线程数量，任务队列长度，线程池的名字。线程池的名字可以把对应的线程池分配给指定的服务，以适应特定的需求。</p>
+<pre><code>
+http {
+    thread_pool one threads=128 max_queue=0;
+    thread_pool two threads=32;
+
+    server {
+        location /one {
+            aio threads=one;
+        }
+
+        location /two {
+            aio threads=two;
+        }
+    }
+…
+}
+</code></pre>
+
+<p>如果没有配置<code class="highlighter-rouge">max_queue</code>的值，NGXIN将使用默认的65536。<code class="highlighter-rouge">max_queue</code>可以设置为0，这时没有任务会在队列中等待，线程池只能处理线程数量的任务，其余的会被拒绝。</p>
+
+<p>现在我们设定一个场景，一台有三个磁盘的缓存代理，缓存所有从后端来的回包，但是需要缓存的数据量将会超过内存的容量。这是一台CDN的节点，目标是最大化磁盘的性能。</p>
+
+<p>你可以选择配置RAID阵列或者选择配置一个特殊的NGINX。</p>
+<pre><code>
+# We assume that each of the hard drives is mounted on one of the directories:
+# /mnt/disk1, /mnt/disk2, or /mnt/disk3 accordingly
+proxy_cache_path /mnt/disk1 levels=1:2 keys_zone=cache_1:256m max_size=1024G 
+                 use_temp_path=off;
+proxy_cache_path /mnt/disk2 levels=1:2 keys_zone=cache_2:256m max_size=1024G 
+                 use_temp_path=off;
+proxy_cache_path /mnt/disk3 levels=1:2 keys_zone=cache_3:256m max_size=1024G 
+                 use_temp_path=off;
+
+thread_pool pool_1 threads=16;
+thread_pool pool_2 threads=16;
+thread_pool pool_3 threads=16;
+
+split_clients $request_uri $disk {
+    33.3%     1;
+    33.3%     2;
+    *         3;
+}
+
+location / {
+    proxy_pass http://backend;
+    proxy_cache_key $request_uri;
+    proxy_cache cache_$disk;
+    aio threads=pool_$disk;
+    sendfile on;
+}
+</code></pre>
+
+<p>这个配置使用了三个独立的缓存和三个独立的线程池分别服务三个磁盘。</p>
+
+<p><code class="highlighter-rouge">split_clients</code>配置起到了负载均衡的作用。</p>
+
+<p><code class="highlighter-rouge">proxy_cache_path</code>的<code class="highlighter-rouge">use_temp_path=off</code>参数指示NGINX将临时文件保存在对应的目录，避免相同的请求使文件在不同的磁盘中拷贝。</p>
+
+<p>这样就能使磁盘达到最大的性能，因为NGINX通过三个线程池独立并行的服务对应的磁盘。每个磁盘有16个独立的线程和对应的任务队列来读写数据。</p>
+
+<p>这个例子说明NGINX可以根据你的硬件需求进行配置。一个优秀的NGINX配置能使你的软件、操作系统、硬件协同工作达到最大的资源利用率。</p>
+
+<h2 id="section-6">总结</h2>
+
+<p>总的来说，线程池是一个很好的特性，它会使NGINX处理阻塞操作尤其是读取大量零碎的数据时性能达到一个新的高度。</p>
+
+<p>不仅如此，前面提到其他的阻塞操作使用这个特性会同样提高性能。NGINX将会继续完善相关组件。NGINX将会不再兼容没有提供异步非阻塞的接口的函数库。NGINX将会投入更多的时间和资源开发自己的非阻塞原型库。随着线程池特性的上线，这些库在不影响模块性能的前提下会更加简单易用。</p>
+
+<p><a href="http://nginx.com/blog/thread-pools-boost-performance-9x/">阅读原文</a></p>
+
+        </div>
+         <footer class="entry-footer" role="contentinfo">
+            Tags:
+            <span class="meta-elements hastags">
+                
+                    <a href="/tags/网络/">网络</a>
+                
+                    <a href="/tags/服务端技术/">服务端技术</a>
+                
+            </span>
+        </footer>
+    </article>
+    
+    <article class="post sample text">
+        <div class="date">
+            <p><a href="/2014/10/25/%E4%BB%8Edocker%E4%BA%86%E8%A7%A3linux-container.html">Oct 25, 2014</a></p>
+        </div>
+
+        <header class="entry-header">
+            <h1 class="entry-title">
+                <a href="/2014/10/25/%E4%BB%8Edocker%E4%BA%86%E8%A7%A3linux-container.html">从docker了解linux container</a>
+            </h1>
+        </header>
+        <div class="entry-content">
+            <p>4年前当我第一次接触eucalyptus、EC2，认识云计算的时候就坚定的认为虚拟化技术是未来的趋势。Image可以快速复制，迁移，部署，这对研发还是运维来说都是十分便利的事情。尤其是可以在几分钟启动成百上千个instance，服务弹性性能，是多么美好的一件事。当时XEN、KVM都是业界最前沿的项目。如今虚拟化技术飞速发展，方向已经从Virtual Machine转移到Virtual Container了。最近基于lxc的docker着实火了，新闻铺天盖地的报道。下面我们就从docker来了解下Virtual Container。</p>
+
+<h2 id="docker">什么是docker？</h2>
+
+<p>docker是为研发和运维搭建的构建、迁移、运行分布式程序的平台，能快速的搭建分布式系统，消除研发，测试和生产环境的差异。docker包含两大组件</p>
+
+<ul>
+  <li>docker engine 开源的虚拟化容器平台</li>
+  <li>docker hub 分享与管理image的平台</li>
+</ul>
+
+<p>docker engine采用了CS架构，包括</p>
+
+<ul>
+  <li>deamon 运行在主机里，不直接与用户交互，管理和运行container。</li>
+  <li>client 接收用户指令，从而构建，分发，运行docker容器。</li>
+</ul>
+
+<p><img src="/img/5.png" alt="" /></p>
+
+<p>在docker内部，主要由三个模块：</p>
+
+<ul>
+  <li>images 是一个只读模版文件，用来生成containers。docker提供简单的方法可以新建image或者更新已经存在的image。</li>
+  <li>containers 是一个目录，包含运行程序的环境。每个containers都是一个隔离安全的程序运行环境。</li>
+  <li>registeries 保存image，提供image上传下载的接口。用户可以创建公有或者私有的registeries，公共的registry称为docker hub。</li>
+</ul>
+
+<p>docker的使用模式和eucalyptus、EC2类似，首先在一台物理机器部署docker engine，从一个初始的container生成一个配置好的image，然后将image上传，保存在docker hub中，当需要扩容或者迁移的时候，将image拷贝到其他部署了docker engine的物理机器，然后启动container。</p>
+
+<h2 id="virtual-machinevirtual-container">Virtual Machine与Virtual Container的区别？</h2>
+
+<h3 id="virtual-machine">Virtual Machine</h3>
+
+<p><img src="/img/3.png" alt="" /></p>
+
+<p>每个instance至少包含数GB，磁盘利用率低。启动instance时，先要启动ghost os，启动耗时较长。优点是完整的环境隔离。</p>
+
+<h3 id="virtual-container">Virtual Container</h3>
+
+<p><img src="/img/4.png" alt="" /></p>
+
+<p>每个container只包含应用程序和它的依赖，运行在隔离的用户态环境中，和其他容器共享操作系统的资源。因此container不但有VM的资源隔离和分配的优点，而且有更高的效率。</p>
+
+<h2 id="virtual-container-1">Virtual Container如何实现？</h2>
+
+<h3 id="namespace">namespace</h3>
+
+<p>namespace是轻量级的进程虚拟化。主要的开发人员是 Eric Biederman，第一阶段的用户态namespace已经合入了linux 2.6.23。从linux 3.8开始，非root权限的进程可以创建自己的用户态namespace，从而获得对应完整的root权限。目前实现了六种namespace，包括</p>
+
+<ul>
+  <li>mmnt(mount points，filesystems)：</li>
+  <li>pid (processes)</li>
+  <li>net (network stack)</li>
+  <li>ipc (System V IPC)</li>
+  <li>uts (hostname)</li>
+  <li>user(UIDs)</li>
+</ul>
+
+<p>还有4种未实现的namespace</p>
+
+<ul>
+  <li>security</li>
+  <li>security keys</li>
+  <li>device</li>
+  <li>time</li>
+</ul>
+
+<p>每个namespace的目标是包含部分全局的系统资源，在每个进程看来，他们拥有独立的全局资源。namespace的目标之一就是实现轻量虚拟化的containers，即让一组进程感觉自己就是系统的仅有的进程。</p>
+
+<p>namespace的原理简单，但是实现非常复杂。</p>
+
+<p>首先，进程描述符<strong>struct task_struct</strong>中增加了一个成员<strong>struct nsproxy</strong>用来标记进程的namespace</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>struct nsproxy {
+	atomic_t count;
+	struct uts_namespace *uts_ns;
+	struct ipc_namespace *ipc_ns;
+	struct mnt_namespace *mnt_ns;
+	struct pid_namespace *pid_ns;
+	struct net	*net_ns;
+}
+</code></pre>
+</div>
+
+<p>kernel会根据相应的标记来设置<strong>struct nsproxy</strong>的值</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>// include/linux/Sched.h
+#define CLONE_NEWNS 	0x00020000	/*New namespace group?*/
+#define CLONE_NEWUTS	0x04000000	/*New utsname group?*/
+#define CLONE_NEWIPC	0x08000000	/*New ipcs*/
+#define CLONE_NEWUSER   0x10000000	/*New user namespace*/
+#define CLONE_NEWPID	0x20000000	/*New pid namespace*/
+#define CLONE_NEWNET	0x40000000	/*New network namespace*/
+</code></pre>
+</div>
+
+<p>在内核态，调用do_fork时，clone_flags使进程实体获得不同的namespace</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>//kernel/Fork.c
+long do_fork(unsigned long clone_flags,
+			unsigned long stack_start,
+			struct pt_regs *regs,
+			unsigned long stack_size,
+			int __user *parent_tidptr,
+			int __user *child_tidptr)
+</code></pre>
+</div>
+
+<p>在用户态，系统调用clone时，带上相应的flags能使进程获得不同的namespace</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>// man 2 clone
+#define _GNU_SOURCE
+#include &lt;sched.h&gt;
+int clone(int (*fn)(void *), void *child_stack, 
+  	        int flags, void *arg, ...
+   	       /* pid_t *ptid, struct user_desc *tls, pid_t *ctid */);
+</code></pre>
+</div>
+
+<p>这样进程启动的时候就获得了相应的namespace。对于每个namespace的实现，方式各不一样，大致是通过对比相应的资源中namespace来判断此进程是否有该资源的权限。</p>
+
+<p>用户看到的namespace是由一个唯一的inode号标识，在linux 3.8后的版本可以通过<code class="highlighter-rouge">ls /proc/&lt; pid &gt;/ns</code>来查看。</p>
+
+<h3 id="cgroup">cgroup</h3>
+
+<p>cgroup提供了聚合和划分进程和他们的子进程到不同等级的进程组里的机制。cgroup的思想很简单，即划分进程到不同等级的进程组里，然后给这些进程组提供独立的系统资源。这项目由google的工程师Paul Menage和Rohit Seth发起，现在的维护者是Li Zefan和Tehun Heo。ps.Li Zefan是华为的工程师喔！</p>
+
+<p>相对于namespace的单进程资源隔离，cgroup提供了基于进程组的资源管理。那么cgroup是不是基于namespace来提供进程组的资源管理呢？目前还不是，后续会不会更改，还需要继续关注。cgroup的现实是通过在kernel的函数中设置了hook来达到相应的功能。</p>
+
+<ul>
+  <li>在linux启动(init/main.c)时，运行各种初始化</li>
+  <li>在进程创建(fork)和销毁(exit)时，初始化进程的cgroup信息</li>
+  <li>使用新的文件系统类型 “cgroup”</li>
+  <li>在进程描述符<strong>struct task_struct</strong>中添加
+    <ul>
+      <li>struct css_set *cgroups;</li>
+      <li>struct list_head cg_list;</li>
+    </ul>
   </li>
-  
-  
+  <li>增加proc系统文件的入口:
+    <ul>
+      <li>每一个进程 /proc/&lt; pid &gt;/cgroup</li>
+      <li>系统级 /proc/cgroups</li>
+    </ul>
+  </li>
+</ul>
 
+<p>因此我们可以在不支持namespace的kernel中构建cgroup。</p>
+
+<p>从实现来看，cgroup是一种虚拟的文件系统(VFS)。cgroup的信息是随内核存在，当系统重启，所有的cgroup信息将被删除。</p>
+
+<h3 id="lxc">LXC</h3>
+
+<p>LXC(linux containers)是linux kernel容器特性的用户态接口， 它集成了多个kernel的特性，包括</p>
+
+<ul>
+  <li>namespace</li>
+  <li>chroot</li>
+  <li>cgroup</li>
+  <li>Apparmor and SELinux profiles</li>
+  <li>Seccomp policies</li>
+  <li>Kernel capabilities</li>
+</ul>
+
+<p>通过这些特性和工具组合，LXC构建一套不需要独立kernel的情况拥有独立的linux运行环境的容器。这样使得用户可以采用更低的成本来构建一个类似于虚拟机的环境。</p>
+
+<h2 id="section">总结</h2>
+
+<p>docker是基于LXC采用go语言编写的服务。docker已经构建出类似EC2从构建，迁移，存储，分发的一整套服务。docker的创始人Solomon Hykes甚至宣称，docker能将互联网升级至下一代。这里的互联网应该特指云计算。因为google基础架构部副总裁也说，我们和docker联手，把容器技术打造为所有云应用的基石。我打开docker的github，发现docker完全由go编写，确实震惊的好一会，我猜想这也是为什么docker能等到google这种大厂商支持的原因之一。Virtual Container能不能取代Virtual Machine有待观察，仅仅靠docker、google的力量远远不够，但基于进程的资源隔离比基于内核的资源隔离在粒度级别更低的层级控制资源，发挥物理机器的性能，这一点来说已经有足够的优势。</p>
+
+<h2 id="section-1">参考文献</h2>
+
+<ul>
+  <li>linux kernel 3.18</li>
+  <li>linux kernel 2.6.32</li>
+  <li>docker https://www.docker.com</li>
+  <li>lxc https://linuxcontainers.org</li>
+  <li>Namespaces in operation http://lwn.net/Articles/531114</li>
+  <li>lxc-namespace http://www.cs.ucsb.edu/~rich/class/cs290-cloud/papers/lxc-namespace.pdf</li>
+  <li>cgroup.txt https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt</li>
+  <li>The past, present, and future of control groups http://lwn.net/Articles/574317</li>
 </ul>
 
 
+        </div>
+         <footer class="entry-footer" role="contentinfo">
+            Tags:
+            <span class="meta-elements hastags">
+                
+                    <a href="/tags/服务端技术/">服务端技术</a>
+                
+            </span>
+        </footer>
+    </article>
+    
+    <article class="post sample text">
+        <div class="date">
+            <p><a href="/2012/07/23/unix%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98%E8%A6%81%E7%82%B9.html">Jul 23, 2012</a></p>
+        </div>
+
+        <header class="entry-header">
+            <h1 class="entry-title">
+                <a href="/2012/07/23/unix%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98%E8%A6%81%E7%82%B9.html">unix共享内存要点</a>
+            </h1>
+        </header>
+        <div class="entry-content">
+            <h3 id="section">共享内存优点：</h3>
+
+<ul>
+  <li>在进程之间不通过内核传递数据，即不通过系统调用拷贝数据，达到快速，高效的数据传输。</li>
+  <li>随内核持续</li>
+</ul>
+
+<p><code class="highlighter-rouge">*nix</code>的共享内存有两套API：<code class="highlighter-rouge">Posix</code>和<code class="highlighter-rouge">System V</code></p>
+
+<p>两者的主要差别是共享内存的大小：</p>
+
+<ul>
+  <li><code class="highlighter-rouge">Posix</code>共享内存大小可通过函数<code class="highlighter-rouge">ftruncate</code>随时修改</li>
+  <li><code class="highlighter-rouge">System V</code>共享内存大小在创建时就已经确定，而且最大值根据系统有所不同</li>
+</ul>
+
+<h3 id="posix"><code class="highlighter-rouge">Posix</code>共享内存</h3>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>#include &lt;sys/mman.h&gt;  
+mmap，munmap，msync，shm_open，shm_unlink
+</code></pre>
+</div>
+
+<p>最主要的函数<code class="highlighter-rouge">mmap</code></p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>void* mmap(void* addr,size_t len,int prot,int flags,int fd,off_t offset)
+</code></pre>
+</div>
+
+<p>函数将一个句柄映射到内存中，这个句柄可以是<code class="highlighter-rouge">open</code>的文件句柄，也可以是<code class="highlighter-rouge">shm_open</code>的共享内存区对象。当fd=-1时为匿名共享内存。
+<code class="highlighter-rouge">*nix</code>一切皆文件的观点，<code class="highlighter-rouge">shm_open</code>也是在<code class="highlighter-rouge">/dev/shm</code>目录下创建一个文件对象，返回对象的描述符。
+<code class="highlighter-rouge">mmap</code>将句柄作为共享内存的底层支撑对象，映射到内存中，这样可以不通过<code class="highlighter-rouge">read</code>、<code class="highlighter-rouge">write</code>在进程之间共享内存。
+由此推测一下，在<code class="highlighter-rouge">*nix</code>的进程间传递数据更加原始的方法是进程间读写一个文件。
+但是频繁的<code class="highlighter-rouge">open</code>、<code class="highlighter-rouge">read</code>、<code class="highlighter-rouge">write</code>、<code class="highlighter-rouge">lseek</code>系统调用会消耗过多的计算资源。
+所以想到了将这个文件句柄映射到内存中，这样就提高了进程间传递数据的效率。</p>
+
+<p>需要注意的函数<code class="highlighter-rouge">msync</code></p>
+
+<p>当修改了内存映射区的内存后，内核会在某个时刻将文件的内容更新。
+为了确信文件被更新，调用函数<code class="highlighter-rouge">msync</code>。
+文件的更新可以是同步<code class="highlighter-rouge">MS_SYNC</code>也可以是异步<code class="highlighter-rouge">MS_ASYNC</code>。</p>
+
+<h3 id="system-v">System V共享内存</h3>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>#include &lt;sys/shm.h&gt;  
+shmget,shmat,shmdt,shmctl
+</code></pre>
+</div>
+
+<p>由于<code class="highlighter-rouge">System V</code>的共享内存有大小的限制，所以可考虑，使用共享内存数组来解决这个问。
+虽然数组的大小即一个进程可以获取共享内存的数量也是有限制，但是可以缓解<code class="highlighter-rouge">System V</code>单个共享内存过小的问题。</p>
+
 
         </div>
-      </div>
-      <div id="container-footer">
-        <div id="container-footer-content">
-          <h3 class="footer-info">Generated by Jekyll and design by zhouyuan @2013</h3>
-        </div>
-      </div>
+         <footer class="entry-footer" role="contentinfo">
+            Tags:
+            <span class="meta-elements hastags">
+                
+                    <a href="/tags/计算机基础/">计算机基础</a>
+                
+            </span>
+        </footer>
+    </article>
+    
+    <!--
+    <div class="pagenation pagenation-index">
+         
+        
+        
+            <span class="current-page">1</span>
+         
+        
+         
+            
+                <a class="jump-page" href="/page2">2</a>
+             
+         
+            
+                <a class="jump-page" href="/page3">3</a>
+             
+         
+        
+        
+            <a href="/page2" class="next" rel="next">Next</a> 
+        
+
+    </div>
+    -->
+</div>
+      <footer id="footer">
+    <span class="copyright">
+        <p>Copyright &copy; 2015 - 2016 <a href="http://www.rangechow.com">rangechow.com</a>. All Rights Reserved</p>
+        <p>Generated by <a href="http://Jekyllrb.com/">Jekyll</a>. Modify from <a href="http://sanographix.github.io/tumblr/zen/">Zen</a> theme, designed by <a href="http://www.sanographix.net/">SANOGRAPHIX.NET</a></p>
+    </span>
+</footer>
 
     </div>
   </body>
+
 </html>
-
-

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="rangechow">
+  <meta name="description" content="最近调试网络的服务端程序，自己写了一个小客户端程序来测试，发现服务程序解包错误。经调试发现客户端的协议头大小和服务器端的协议头大 小不一致。原因是服务器端加了#pragma pack(1),而客户端没加。">
+
+  <title>#pragma pack学习</title>
+ 
+  <link rel="stylesheet" href="/css/zen.css">
+  <link rel="canonical" href="http://www.rangechow.com/2011/07/15/pragma-pack%E5%AD%A6%E4%B9%A0.html">
+  <link rel="alternate" type="application/rss+xml" title="RangeChow" href="http://www.rangechow.com/feed.xml">
+
+  <script src="/js/zen-js.min.js"></script>
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-71759796-1', 'auto');
+  ga('send', 'pageview');
+
+  </script>
+</head>
+
+
+  <body>
+    <div id="container">
+      <div class="mobile-nav-panel">
+  <i class="icon-reorder icon-large"></i>
+</div>
+
+<nav class="nav" role="navigation">
+  <ul>
+    <li>
+      <a href="/">Home</a>
+    </li>
+    <li>
+      <a href="/archive.html">Archive</a>
+    </li>
+     
+    <li>
+      <a class="page-link" href="/about/">About Me</a>
+    </li>
+                       
+    <li>
+        <a href="/feed.xml">RSS</a>
+    </li>
+  </ul>
+</nav>
+
+<header id="header" role="banner">
+  <h1 class="blog-title">
+    <a href="/">RangeChow</a>
+  </h1>
+  <h2 class="blog-description">自律，坚持
+</h2>
+</header>
+      <div id="main" class="autopagerize_page_element" role="main">
+    <article class="post sample text">
+        <div class="date">
+            <p><a href="/2011/07/15/pragma-pack%E5%AD%A6%E4%B9%A0.html">Jul 15, 2011</a></p>
+        </div>
+
+        <header class="entry-header">
+            <h1 class="entry-title">
+                <a href="/2011/07/15/pragma-pack%E5%AD%A6%E4%B9%A0.html">#pragma pack学习</a>
+            </h1>
+        </header>
+        <div class="entry-content">
+            <p>最近调试网络的服务端程序，自己写了一个小客户端程序来测试，发现服务程序解包错误。
+经调试发现客户端的协议头大小和服务器端的协议头大 小不一致。
+原因是服务器端加了<code class="highlighter-rouge">#pragma pack(1)</code>,而客户端没加。</p>
+
+<p>之前没接触过这个编译宏，现在来认真学习之。首先google之~~</p>
+
+<p>原来#pragma pack有几种形式，我所接触到的是<code class="highlighter-rouge">#pragma pack(n)</code>，即变量以n字节对齐。
+变量对齐在每个系统中是不一样的，默认的对齐方式能有效的提高cpu取指取数的速度，但是可能会浪费一定的空间。
+在网络程序中采用<code class="highlighter-rouge">#pragma pack(1)</code>,即变量紧缩，不但可以减少网络流量，还可以兼容各种系统，不会因为系统对齐方式不同而导致解包错误。</p>
+
+<p>了解了概念和优点，现在我们就来测试之~</p>
+
+<p>平台：CPU—Pentium E5700 内存—2G</p>
+
+<p>操作系统：</p>
+
+<ol>
+  <li>ubuntu 11.04 32bit   编译器：G++ 4.5.2</li>
+  <li>windows xp           编译器：VS2010</li>
+</ol>
+
+<p>先看第一个测试:结构体在正常情况和紧缩情况在以上不同环境下占用的内存大小。</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>struct pack {
+    int i;
+    short s;
+    double d;
+    char c;
+    short f;
+}
+</code></pre>
+</div>
+
+<p>测试结果为：</p>
+
+<p>1：
+<img src="/img/20110715-4.jpg" alt="" /></p>
+
+<p>2：
+<img src="/img/20110715-5.jpg" alt="" /></p>
+
+<p>测试结果分析：</p>
+
+<p>可以看出紧缩后结构体的大小为15，是结构体内置类型大小的和。
+但是在默认情况下，结构体的大小都是对齐字节数的倍数。
+ubuntu下pack只需要20个字节，而windows要24个字节。
+这是因为ubuntu是以4字节对齐，而windows则是以最大的内置类型的字节数对齐，在结构体内最大的内置类型为double，其大小为8个字节。
+他们在内存中的对齐方式如下图：</p>
+
+<p>1：
+<img src="/img/20110715-6.jpg" alt="" /></p>
+
+<p>2：
+<img src="/img/20110715-7.jpg" alt="" /></p>
+
+<p>还需注意的是，在对齐类型的内部都是以2字节对齐的。</p>
+
+<p>结论：在默认情况下，linux操作系统是以4字节对齐，windows操作系统则是以最大的内置类型对齐。</p>
+
+<p>第二个测试</p>
+
+<p>一个结构体内包含另外一个结构体，其大小的情况。</p>
+
+<p>内部的结构体为:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>struct pack {
+    short s;
+    double d;
+}
+</code></pre>
+</div>
+
+<p>外部的结构体为</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>struct complex _pack{
+    char c;
+    struct pack s;
+    double d;
+}
+</code></pre>
+</div>
+
+<p>我们有四种情况：
+1.  pack紧缩，complex _pack紧缩
+2.  pack紧缩，complex _pack默认
+3.  pack默认，complex _pack紧缩
+4.  pack默认，complex _pack默认</p>
+
+<p>以下的排列均按此顺序。测试的结果:</p>
+
+<p>1：
+<img src="/img/20110715-8.jpg" alt="" /></p>
+
+<p>2：
+<img src="/img/20110715-9.jpg" alt="" /></p>
+
+<p>测试结果分析：</p>
+
+<p>在两个操作系统下，除了第一种情况—-内结构体和外结构体都紧缩—-相同之外，其他三种情况都不相同。
+我们可以根据偏移画出结构体在内存中的情况。第一种情况省略。</p>
+
+<p>1：
+<img src="/img/20110715-10.jpg" alt="" /></p>
+
+<p>2：
+<img src="/img/20110715-11.jpg" alt="" /></p>
+
+<p>结论：#pragma pack只影响当前结构体的变量的对齐情况，并不会影响结构体内部的结构体变量的排列情况。
+或者说#pragma pack的作用域只是一层。
+我们由第三种情况，内部结构体正常，外部结构体紧缩，可以得出结构体的对齐是按偏移计算的。</p>
+
+<p>这里还有一个问题没解决，为什么第二种情况内部结构体的偏移都是1?不是4或者8？</p>
+
+
+        </div>
+        <footer class="entry-footer" role="contentinfo">
+                Tags:
+                <span class="meta-elements hastags">
+                    
+                        <a href="/tags/计算机基础/">计算机基础</a>
+                    
+                </span>
+        </footer>
+    </article>
+    
+</div>
+
+
+      <footer id="footer">
+    <span class="copyright">
+        <p>Copyright &copy; 2015 - 2016 <a href="http://www.rangechow.com">rangechow.com</a>. All Rights Reserved</p>
+        <p>Generated by <a href="http://Jekyllrb.com/">Jekyll</a>. Modify from <a href="http://sanographix.github.io/tumblr/zen/">Zen</a> theme, designed by <a href="http://www.sanographix.net/">SANOGRAPHIX.NET</a></p>
+    </span>
+</footer>
+
+    </div>
+  </body>
+
+</html>

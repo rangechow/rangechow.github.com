@@ -1,0 +1,977 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>RangeChow</title>
+    <description>自律，坚持
+</description>
+    <link>http://www.rangechow.com/</link>
+    <atom:link href="http://www.rangechow.com/feed.xml" rel="self" type="application/rss+xml"/>
+    <pubDate>Sun, 27 Dec 2015 11:26:40 +0800</pubDate>
+    <lastBuildDate>Sun, 27 Dec 2015 11:26:40 +0800</lastBuildDate>
+    <generator>Jekyll v3.0.1</generator>
+    
+      <item>
+        <title>[译文]NGINX加入线程池特性，性能可提升9倍</title>
+        <description>&lt;h2 id=&quot;section&quot;&gt;介绍&lt;/h2&gt;
+
+&lt;p&gt;NGINX采用异步、事件驱动的服务器架构来处理HTTP请求。与为每个HTTP请求创建或分配另一个服务进程/线程的传统服务器架构不同，NGINX使用非阻塞套接字和epoll/kqueue模式在一个工作进程中处理多个HTTP请求。而且NGINX的进程数量是一个非常小的常量，使用的内存不多，进程切换频率低，因此这种服务器架构可以同时处理上百万的模拟HTTP请求。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-1.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;即便如此，异步、事件驱动的服务器架构仍不完美。产生缺陷的原因是：阻塞。不幸的是，很多NGINX的第三方模块使用阻塞调用，而用户并不了解这些特性，导致其NGINX服务性能严重下降。我们必须不惜一切代价避免阻塞。
+但是现阶段在NGINX官方代码里都不能做到完全没有阻塞调用。因此NGINX采用另一个方案来解决阻塞问题，这个方案就是“线程池”。线程池已经在NGINX版本1.7.11中实现。在介绍线程池前，我们先来聊聊阻塞。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-1&quot;&gt;阻塞&lt;/h2&gt;
+
+&lt;p&gt;为了更好地理解这一问题，先简要介绍下NGINX的工作机制。
+总的来说，NGINX是事件处理程序，从内核读取链接产生的事件信息，然后告诉操作系统该如何处理。NGINX把所有繁重任务都交给操作系统，使NGINX可以快速、及时响应。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-2.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;事件可以是超时、通知套接字读写数据、通知错误告警等。NGINX收到一堆的事件并放入处理队列中，然后一个接一个的处理它们。事件队列在进程的主循环中。在大多数情况下，事件处理非常快，也许只需要几个CPU周期。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-3.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;如果有些事件处理非常耗时，将会导致什么情况发生呢？这个事件会一直在处理状态，直到完成后，主循环才能继续处理下一个事件。
+所以，阻塞意味着主循环将会被这个操作暂停一段较长的时间。阻塞操作有很多种，例如，CPU密集型计算、等待锁、磁盘IO、同步的网络操作等。关键是当进行阻塞操作时，工作进程不能处理其他事件，即使系统资源空闲。
+举个例子，有一队顾客正在排队向销售员购买商品。第一个顾客需要购买的商品在这间商店没有库存，于是销售员立马跑到仓库去取货。这个队伍的其他人将要等待两个小时才能购买商品，即使他们需要的商品就在商店中。你能想象后面的等待的人的表情吗？那会是非常烦躁不安的。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-4.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;类似的情况同样会发生NGINX中。当读取的数据不在内存中，需要从磁盘的文件中获取。磁盘IO耗时几百个CPU周期，而队列中的其他事件需要的数据可能就在内存中，但是他们必须等待。结果大部分的请求的延迟增加，系统资源利用率下降。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-5.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;有些操作系统，例如FreeBSD,提供读写文件的异步接口。NGINX就可以利用这些接口避免阻塞。并不是所有的Linux系统都提供这类接口。虽然Linux提供另一种读取文件的异步接口（译者注：这里应该是指&lt;code class=&quot;highlighter-rouge&quot;&gt;mmap&lt;/code&gt;），但是这里有两个明显的坑。一个是需要把文件映射在内存中，另一个是文件描述符需要有&lt;code class=&quot;highlighter-rouge&quot;&gt;O_DIRECT&lt;/code&gt;标记。第一个坑NGINX能很好处理，而第二个坑意味着文件的所有访问都会增加磁盘负载。显然这是不科学的。
+为了解决这个问题，NGINX 1.7.11版本引入了线程池技术。但是现在默认的NGINX Plus并没有包含这个特性，如果你有需要，请联系NGINX的销售顾问帮你构建包含线程池的NGINX Plus R6版本。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-2&quot;&gt;线程池&lt;/h2&gt;
+
+&lt;p&gt;我们回到笨销售员的例子。这回销售员变聪明了，他叫了个快递去取仓库中的商品，并让这个顾客在一旁等待，继续处理后面顾客的购买请求。因此只有需要购买仓库中商品的顾客需要等待，其他顾客可以马上购买到他需要的商品。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-6.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;在NGINX中，线程池的作用和快递类似。它由一个任务队列和几个工作线程组成。当工作进程需要处理事件有耗时的操作时，就把任务放进线程池的任务队列，然后这个任务就会被空闲的工作线程处理。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-7.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;这个任务队列被一些特定的资源限制，可能会处理不过来。但是至少耗时的事件不会阻碍其他事件的处理。
+磁盘IO是阻塞操作最常见的例子。NGINX中的线程池可以处理任何不适合在工作进程主循环中处理的任务。
+现在，线程池中只实现了两个常见的操作，大多数系统中的&lt;code class=&quot;highlighter-rouge&quot;&gt;read()&lt;/code&gt;系统调用和Linux系统中的&lt;code class=&quot;highlighter-rouge&quot;&gt;sendfile()&lt;/code&gt;系统调用。NGINX将会继续在未来的版本中增加其他操作。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-3&quot;&gt;基准测试&lt;/h2&gt;
+
+&lt;p&gt;实践是检验真理的唯一标准。我们将模拟阻塞和非阻塞的混合请求来对线程池的效率做基准测试。
+HTTP请求获取数据，但是数据不能全部缓存在内存中。测试机有48GB内存，我们在磁盘上生成了一共256GB的文件，每个文件4MB，然后配置NGINX 1.9.0。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;
+worker_processes 16;
+
+events {
+    accept_mutex off;
+}
+
+http {
+    include mime.types;
+    default_type application/octet-stream;
+
+    access_log off;
+    sendfile on;
+    sendfile_max_chunk 512k;
+
+    server {
+        listen 8000;
+
+        location / {
+            root /storage;
+        }
+    }
+}	
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;为了达到最好的性能&lt;code class=&quot;highlighter-rouge&quot;&gt;logging&lt;/code&gt;和&lt;code class=&quot;highlighter-rouge&quot;&gt;accept_mutex&lt;/code&gt;已经被禁用,&lt;code class=&quot;highlighter-rouge&quot;&gt;sendfile&lt;/code&gt;和&lt;code class=&quot;highlighter-rouge&quot;&gt;sendfile_max_chunk&lt;/code&gt;被设置。&lt;code class=&quot;highlighter-rouge&quot;&gt;sendfile_max_chunk&lt;/code&gt;可以减少&lt;code class=&quot;highlighter-rouge&quot;&gt;sendfile()&lt;/code&gt;的耗时，因为NGINX每次只发送512KB的块。
+测试机有两个Intel Xeon E5645（12 cores，24 HT-threads in total）处理器，10Gbps网卡，有四块Western Digital WD1003FBYX硬盘，并组成RAID10阵列。操作系统是Ubuntu Server 14.04.1 LTS。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-9.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;客户端有两台一样的测试机。其中一台并发200，请求随机的文件。这些请求可能会导致缓存未命中而产生磁盘IO。这台机器我们称为随机负载。另一台并发50，请求相同的文件。由于该文件频繁访问，会被缓存在内存中。NGINX可以快速处理这类请求，但是可能会被其他请求阻塞。这台机器我们称为常量负载。
+在服务器上使用ifstat监测性能。并在第二台测试机上使用WRK监测性能。&lt;/p&gt;
+
+&lt;p&gt;没有线程池的版本性能一般，吞吐量为1Gbps。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-10.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;top输出的信息显示工作线程都在阻塞状态。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-11.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;吞吐量被磁盘IO限制，CPU大部分时间都处于空闲状态。
+WRK的结果非常糟糕。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-12.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;常量负载请求的数据应该是从内存中获取，但是延迟非常大。这是由于所有的工作进程都在处理随机负载产生的磁盘IO。&lt;/p&gt;
+
+&lt;p&gt;现在使用线程池版本测试。在配置的&lt;code class=&quot;highlighter-rouge&quot;&gt;location&lt;/code&gt;块中加入&lt;code class=&quot;highlighter-rouge&quot;&gt;aio threads&lt;/code&gt;。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;
+location / {
+    root /storage;
+    aio threads;
+}	
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;测试结果&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-14.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;线程池的版本吞吐量为9.5Gbps！
+可能可以达到更高的吞吐量，但是9.5Gbps已经接近网卡的极限吞吐量。这个测试的瓶颈在网卡。
+top输出的信息显示工作线程都在休眠等待新的事件。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-15.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;CPU大部分时间仍然处于空闲状态。
+WRK的结果显示平均延迟已经由7.42秒下降到226.32毫秒，速度提升33倍。每秒的请求由8上升到250，数量提升了31倍！&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/622-16.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;这结果是由于请求不再受到其他阻塞操作的影响。只要磁盘系统工作正常，随机负载就能得到很好的服务。NGINX使用剩下的资源来服务常量负载。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-4&quot;&gt;依旧没有银弹&lt;/h2&gt;
+
+&lt;p&gt;如果NGINX中有阻塞操作和有提升性能的需求，你可能会迫不及待的使用线程池。但是先别急。&lt;/p&gt;
+
+&lt;p&gt;NGINX中大部分&lt;code class=&quot;highlighter-rouge&quot;&gt;read()&lt;/code&gt;和&lt;code class=&quot;highlighter-rouge&quot;&gt;sendfile()&lt;/code&gt;操作不会产生过多的磁盘IO。如果你有足够的内存，操作系统会自动把访问频率高的文件缓存在内存中，我们称为页高速缓存。&lt;/p&gt;
+
+&lt;p&gt;页高速缓存非常有效，使NGINX在大部分场景下有良好性能。页高速缓存中取数据十分快，如果使用线程池会有点多余。&lt;/p&gt;
+
+&lt;p&gt;所以当你有足够的内存并且所处理的数据总量不大，NGINX在没有线程池的情况下已经可以很完美的工作了。&lt;/p&gt;
+
+&lt;p&gt;只有在特定的场景下，才需要把&lt;code class=&quot;highlighter-rouge&quot;&gt;read()&lt;/code&gt;交给线程池处理。当出现大量请求获取数据，但数据不能保存在系统的缓存中时，使用线程池会有明显的效果。最常见的例子就流媒体服务，这个和我们基准测试情况差不多。&lt;/p&gt;
+
+&lt;p&gt;我们非常欣喜，能把&lt;code class=&quot;highlighter-rouge&quot;&gt;read()&lt;/code&gt;操作交给线程池处理从而降低负载。判断是否使用线程池的标准是文件数据是否能保存在内存中。目前遇到的情况中，只有上面的例子需要使用线程池来处理&lt;code class=&quot;highlighter-rouge&quot;&gt;read()&lt;/code&gt;事件。&lt;/p&gt;
+
+&lt;p&gt;再说说刚刚的销售员例子。现在销售员不知道商品是否在商店中，因此他要么把每个商品都让快递员去取，要么都自己去取。&lt;/p&gt;
+
+&lt;p&gt;问题的根源是操作系统忽略了这个特性的开发。在2010年Linux尝试加入&lt;code class=&quot;highlighter-rouge&quot;&gt;fincore()&lt;/code&gt;系统调用，但是最终未能实现。之后数度尝试了在&lt;code class=&quot;highlighter-rouge&quot;&gt;preadv2()&lt;/code&gt;中加入&lt;code class=&quot;highlighter-rouge&quot;&gt;RWF_NONBLOCK&lt;/code&gt;标记。但是这些情况仍不明朗。内核还没加入这个特性的主要原因是拖延。&lt;/p&gt;
+
+&lt;p&gt;FreeBSD已经有非常好的异步&lt;code class=&quot;highlighter-rouge&quot;&gt;read()&lt;/code&gt;接口，因此不需要使用线程池。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-5&quot;&gt;配置线程池&lt;/h2&gt;
+
+&lt;p&gt;你确定要使用线程池能提高NGINX性能，下面来介绍下线程池的配置。&lt;/p&gt;
+
+&lt;p&gt;配置十分简单灵活。首先你需要使用NGINX 1.7.11版本或者之后的版本，带上&lt;code class=&quot;highlighter-rouge&quot;&gt;--with-threads&lt;/code&gt;标志编译。在最简单的例子是在&lt;code class=&quot;highlighter-rouge&quot;&gt;http&lt;/code&gt;、&lt;code class=&quot;highlighter-rouge&quot;&gt;server&lt;/code&gt;或&lt;code class=&quot;highlighter-rouge&quot;&gt;location&lt;/code&gt;块中加入&lt;code class=&quot;highlighter-rouge&quot;&gt;aio threads&lt;/code&gt;。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;
+aio threads;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;这是最简单的线程池配置，其实是以下配置的简化版。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;
+thread_pool default threads=32 max_queue=65536;
+aio threads=default;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;配置定义了长度为65536的任务队列和32个工作线程。如果任务队列满载，NGINX会打印错误日志并拒接新的请求。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;
+thread pool &quot;NAME&quot; queue overflow: N tasks waiting
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;出现错误日志，意味着HTTP请求的处理速度已经远远低于HTTP请求增加的速度，你可以考虑增加工作线程，如果这样也不能解决问题，说明你的系统已经不能承载这么大量的HTTP请求。&lt;/p&gt;
+
+&lt;p&gt;使用&lt;code class=&quot;highlighter-rouge&quot;&gt;thread_pool&lt;/code&gt;标记，你可以配置工作线程数量，任务队列长度，线程池的名字。线程池的名字可以把对应的线程池分配给指定的服务，以适应特定的需求。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;
+http {
+    thread_pool one threads=128 max_queue=0;
+    thread_pool two threads=32;
+
+    server {
+        location /one {
+            aio threads=one;
+        }
+
+        location /two {
+            aio threads=two;
+        }
+    }
+…
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;如果没有配置&lt;code class=&quot;highlighter-rouge&quot;&gt;max_queue&lt;/code&gt;的值，NGXIN将使用默认的65536。&lt;code class=&quot;highlighter-rouge&quot;&gt;max_queue&lt;/code&gt;可以设置为0，这时没有任务会在队列中等待，线程池只能处理线程数量的任务，其余的会被拒绝。&lt;/p&gt;
+
+&lt;p&gt;现在我们设定一个场景，一台有三个磁盘的缓存代理，缓存所有从后端来的回包，但是需要缓存的数据量将会超过内存的容量。这是一台CDN的节点，目标是最大化磁盘的性能。&lt;/p&gt;
+
+&lt;p&gt;你可以选择配置RAID阵列或者选择配置一个特殊的NGINX。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;
+# We assume that each of the hard drives is mounted on one of the directories:
+# /mnt/disk1, /mnt/disk2, or /mnt/disk3 accordingly
+proxy_cache_path /mnt/disk1 levels=1:2 keys_zone=cache_1:256m max_size=1024G 
+                 use_temp_path=off;
+proxy_cache_path /mnt/disk2 levels=1:2 keys_zone=cache_2:256m max_size=1024G 
+                 use_temp_path=off;
+proxy_cache_path /mnt/disk3 levels=1:2 keys_zone=cache_3:256m max_size=1024G 
+                 use_temp_path=off;
+
+thread_pool pool_1 threads=16;
+thread_pool pool_2 threads=16;
+thread_pool pool_3 threads=16;
+
+split_clients $request_uri $disk {
+    33.3%     1;
+    33.3%     2;
+    *         3;
+}
+
+location / {
+    proxy_pass http://backend;
+    proxy_cache_key $request_uri;
+    proxy_cache cache_$disk;
+    aio threads=pool_$disk;
+    sendfile on;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;这个配置使用了三个独立的缓存和三个独立的线程池分别服务三个磁盘。&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;split_clients&lt;/code&gt;配置起到了负载均衡的作用。&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;proxy_cache_path&lt;/code&gt;的&lt;code class=&quot;highlighter-rouge&quot;&gt;use_temp_path=off&lt;/code&gt;参数指示NGINX将临时文件保存在对应的目录，避免相同的请求使文件在不同的磁盘中拷贝。&lt;/p&gt;
+
+&lt;p&gt;这样就能使磁盘达到最大的性能，因为NGINX通过三个线程池独立并行的服务对应的磁盘。每个磁盘有16个独立的线程和对应的任务队列来读写数据。&lt;/p&gt;
+
+&lt;p&gt;这个例子说明NGINX可以根据你的硬件需求进行配置。一个优秀的NGINX配置能使你的软件、操作系统、硬件协同工作达到最大的资源利用率。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-6&quot;&gt;总结&lt;/h2&gt;
+
+&lt;p&gt;总的来说，线程池是一个很好的特性，它会使NGINX处理阻塞操作尤其是读取大量零碎的数据时性能达到一个新的高度。&lt;/p&gt;
+
+&lt;p&gt;不仅如此，前面提到其他的阻塞操作使用这个特性会同样提高性能。NGINX将会继续完善相关组件。NGINX将会不再兼容没有提供异步非阻塞的接口的函数库。NGINX将会投入更多的时间和资源开发自己的非阻塞原型库。随着线程池特性的上线，这些库在不影响模块性能的前提下会更加简单易用。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;http://nginx.com/blog/thread-pools-boost-performance-9x/&quot;&gt;阅读原文&lt;/a&gt;&lt;/p&gt;
+</description>
+        <pubDate>Mon, 22 Jun 2015 00:00:00 +0800</pubDate>
+        <link>http://www.rangechow.com/2015/06/22/%E8%AF%91%E6%96%87-Nginx%E5%8A%A0%E5%85%A5%E7%BA%BF%E7%A8%8B%E6%B1%A0%E7%89%B9%E6%80%A7-%E6%80%A7%E8%83%BD%E5%8F%AF%E6%8F%90%E5%8D%879%E5%80%8D.html</link>
+        <guid isPermaLink="true">http://www.rangechow.com/2015/06/22/%E8%AF%91%E6%96%87-Nginx%E5%8A%A0%E5%85%A5%E7%BA%BF%E7%A8%8B%E6%B1%A0%E7%89%B9%E6%80%A7-%E6%80%A7%E8%83%BD%E5%8F%AF%E6%8F%90%E5%8D%879%E5%80%8D.html</guid>
+        
+        <category>网络</category>
+        
+        <category>服务端技术</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>从docker了解linux container</title>
+        <description>&lt;p&gt;4年前当我第一次接触eucalyptus、EC2，认识云计算的时候就坚定的认为虚拟化技术是未来的趋势。Image可以快速复制，迁移，部署，这对研发还是运维来说都是十分便利的事情。尤其是可以在几分钟启动成百上千个instance，服务弹性性能，是多么美好的一件事。当时XEN、KVM都是业界最前沿的项目。如今虚拟化技术飞速发展，方向已经从Virtual Machine转移到Virtual Container了。最近基于lxc的docker着实火了，新闻铺天盖地的报道。下面我们就从docker来了解下Virtual Container。&lt;/p&gt;
+
+&lt;h2 id=&quot;docker&quot;&gt;什么是docker？&lt;/h2&gt;
+
+&lt;p&gt;docker是为研发和运维搭建的构建、迁移、运行分布式程序的平台，能快速的搭建分布式系统，消除研发，测试和生产环境的差异。docker包含两大组件&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;docker engine 开源的虚拟化容器平台&lt;/li&gt;
+  &lt;li&gt;docker hub 分享与管理image的平台&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;docker engine采用了CS架构，包括&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;deamon 运行在主机里，不直接与用户交互，管理和运行container。&lt;/li&gt;
+  &lt;li&gt;client 接收用户指令，从而构建，分发，运行docker容器。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/5.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;在docker内部，主要由三个模块：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;images 是一个只读模版文件，用来生成containers。docker提供简单的方法可以新建image或者更新已经存在的image。&lt;/li&gt;
+  &lt;li&gt;containers 是一个目录，包含运行程序的环境。每个containers都是一个隔离安全的程序运行环境。&lt;/li&gt;
+  &lt;li&gt;registeries 保存image，提供image上传下载的接口。用户可以创建公有或者私有的registeries，公共的registry称为docker hub。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;docker的使用模式和eucalyptus、EC2类似，首先在一台物理机器部署docker engine，从一个初始的container生成一个配置好的image，然后将image上传，保存在docker hub中，当需要扩容或者迁移的时候，将image拷贝到其他部署了docker engine的物理机器，然后启动container。&lt;/p&gt;
+
+&lt;h2 id=&quot;virtual-machinevirtual-container&quot;&gt;Virtual Machine与Virtual Container的区别？&lt;/h2&gt;
+
+&lt;h3 id=&quot;virtual-machine&quot;&gt;Virtual Machine&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/3.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;每个instance至少包含数GB，磁盘利用率低。启动instance时，先要启动ghost os，启动耗时较长。优点是完整的环境隔离。&lt;/p&gt;
+
+&lt;h3 id=&quot;virtual-container&quot;&gt;Virtual Container&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/4.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;每个container只包含应用程序和它的依赖，运行在隔离的用户态环境中，和其他容器共享操作系统的资源。因此container不但有VM的资源隔离和分配的优点，而且有更高的效率。&lt;/p&gt;
+
+&lt;h2 id=&quot;virtual-container-1&quot;&gt;Virtual Container如何实现？&lt;/h2&gt;
+
+&lt;h3 id=&quot;namespace&quot;&gt;namespace&lt;/h3&gt;
+
+&lt;p&gt;namespace是轻量级的进程虚拟化。主要的开发人员是 Eric Biederman，第一阶段的用户态namespace已经合入了linux 2.6.23。从linux 3.8开始，非root权限的进程可以创建自己的用户态namespace，从而获得对应完整的root权限。目前实现了六种namespace，包括&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;mmnt(mount points，filesystems)：&lt;/li&gt;
+  &lt;li&gt;pid (processes)&lt;/li&gt;
+  &lt;li&gt;net (network stack)&lt;/li&gt;
+  &lt;li&gt;ipc (System V IPC)&lt;/li&gt;
+  &lt;li&gt;uts (hostname)&lt;/li&gt;
+  &lt;li&gt;user(UIDs)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;还有4种未实现的namespace&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;security&lt;/li&gt;
+  &lt;li&gt;security keys&lt;/li&gt;
+  &lt;li&gt;device&lt;/li&gt;
+  &lt;li&gt;time&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;每个namespace的目标是包含部分全局的系统资源，在每个进程看来，他们拥有独立的全局资源。namespace的目标之一就是实现轻量虚拟化的containers，即让一组进程感觉自己就是系统的仅有的进程。&lt;/p&gt;
+
+&lt;p&gt;namespace的原理简单，但是实现非常复杂。&lt;/p&gt;
+
+&lt;p&gt;首先，进程描述符&lt;strong&gt;struct task_struct&lt;/strong&gt;中增加了一个成员&lt;strong&gt;struct nsproxy&lt;/strong&gt;用来标记进程的namespace&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct nsproxy {
+	atomic_t count;
+	struct uts_namespace *uts_ns;
+	struct ipc_namespace *ipc_ns;
+	struct mnt_namespace *mnt_ns;
+	struct pid_namespace *pid_ns;
+	struct net	*net_ns;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;kernel会根据相应的标记来设置&lt;strong&gt;struct nsproxy&lt;/strong&gt;的值&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;// include/linux/Sched.h
+#define CLONE_NEWNS 	0x00020000	/*New namespace group?*/
+#define CLONE_NEWUTS	0x04000000	/*New utsname group?*/
+#define CLONE_NEWIPC	0x08000000	/*New ipcs*/
+#define CLONE_NEWUSER   0x10000000	/*New user namespace*/
+#define CLONE_NEWPID	0x20000000	/*New pid namespace*/
+#define CLONE_NEWNET	0x40000000	/*New network namespace*/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;在内核态，调用do_fork时，clone_flags使进程实体获得不同的namespace&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//kernel/Fork.c
+long do_fork(unsigned long clone_flags,
+			unsigned long stack_start,
+			struct pt_regs *regs,
+			unsigned long stack_size,
+			int __user *parent_tidptr,
+			int __user *child_tidptr)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;在用户态，系统调用clone时，带上相应的flags能使进程获得不同的namespace&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;// man 2 clone
+#define _GNU_SOURCE
+#include &amp;lt;sched.h&amp;gt;
+int clone(int (*fn)(void *), void *child_stack, 
+  	        int flags, void *arg, ...
+   	       /* pid_t *ptid, struct user_desc *tls, pid_t *ctid */);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;这样进程启动的时候就获得了相应的namespace。对于每个namespace的实现，方式各不一样，大致是通过对比相应的资源中namespace来判断此进程是否有该资源的权限。&lt;/p&gt;
+
+&lt;p&gt;用户看到的namespace是由一个唯一的inode号标识，在linux 3.8后的版本可以通过&lt;code class=&quot;highlighter-rouge&quot;&gt;ls /proc/&amp;lt; pid &amp;gt;/ns&lt;/code&gt;来查看。&lt;/p&gt;
+
+&lt;h3 id=&quot;cgroup&quot;&gt;cgroup&lt;/h3&gt;
+
+&lt;p&gt;cgroup提供了聚合和划分进程和他们的子进程到不同等级的进程组里的机制。cgroup的思想很简单，即划分进程到不同等级的进程组里，然后给这些进程组提供独立的系统资源。这项目由google的工程师Paul Menage和Rohit Seth发起，现在的维护者是Li Zefan和Tehun Heo。ps.Li Zefan是华为的工程师喔！&lt;/p&gt;
+
+&lt;p&gt;相对于namespace的单进程资源隔离，cgroup提供了基于进程组的资源管理。那么cgroup是不是基于namespace来提供进程组的资源管理呢？目前还不是，后续会不会更改，还需要继续关注。cgroup的现实是通过在kernel的函数中设置了hook来达到相应的功能。&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;在linux启动(init/main.c)时，运行各种初始化&lt;/li&gt;
+  &lt;li&gt;在进程创建(fork)和销毁(exit)时，初始化进程的cgroup信息&lt;/li&gt;
+  &lt;li&gt;使用新的文件系统类型 “cgroup”&lt;/li&gt;
+  &lt;li&gt;在进程描述符&lt;strong&gt;struct task_struct&lt;/strong&gt;中添加
+    &lt;ul&gt;
+      &lt;li&gt;struct css_set *cgroups;&lt;/li&gt;
+      &lt;li&gt;struct list_head cg_list;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;增加proc系统文件的入口:
+    &lt;ul&gt;
+      &lt;li&gt;每一个进程 /proc/&amp;lt; pid &amp;gt;/cgroup&lt;/li&gt;
+      &lt;li&gt;系统级 /proc/cgroups&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;因此我们可以在不支持namespace的kernel中构建cgroup。&lt;/p&gt;
+
+&lt;p&gt;从实现来看，cgroup是一种虚拟的文件系统(VFS)。cgroup的信息是随内核存在，当系统重启，所有的cgroup信息将被删除。&lt;/p&gt;
+
+&lt;h3 id=&quot;lxc&quot;&gt;LXC&lt;/h3&gt;
+
+&lt;p&gt;LXC(linux containers)是linux kernel容器特性的用户态接口， 它集成了多个kernel的特性，包括&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;namespace&lt;/li&gt;
+  &lt;li&gt;chroot&lt;/li&gt;
+  &lt;li&gt;cgroup&lt;/li&gt;
+  &lt;li&gt;Apparmor and SELinux profiles&lt;/li&gt;
+  &lt;li&gt;Seccomp policies&lt;/li&gt;
+  &lt;li&gt;Kernel capabilities&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;通过这些特性和工具组合，LXC构建一套不需要独立kernel的情况拥有独立的linux运行环境的容器。这样使得用户可以采用更低的成本来构建一个类似于虚拟机的环境。&lt;/p&gt;
+
+&lt;h2 id=&quot;section&quot;&gt;总结&lt;/h2&gt;
+
+&lt;p&gt;docker是基于LXC采用go语言编写的服务。docker已经构建出类似EC2从构建，迁移，存储，分发的一整套服务。docker的创始人Solomon Hykes甚至宣称，docker能将互联网升级至下一代。这里的互联网应该特指云计算。因为google基础架构部副总裁也说，我们和docker联手，把容器技术打造为所有云应用的基石。我打开docker的github，发现docker完全由go编写，确实震惊的好一会，我猜想这也是为什么docker能等到google这种大厂商支持的原因之一。Virtual Container能不能取代Virtual Machine有待观察，仅仅靠docker、google的力量远远不够，但基于进程的资源隔离比基于内核的资源隔离在粒度级别更低的层级控制资源，发挥物理机器的性能，这一点来说已经有足够的优势。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-1&quot;&gt;参考文献&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;linux kernel 3.18&lt;/li&gt;
+  &lt;li&gt;linux kernel 2.6.32&lt;/li&gt;
+  &lt;li&gt;docker https://www.docker.com&lt;/li&gt;
+  &lt;li&gt;lxc https://linuxcontainers.org&lt;/li&gt;
+  &lt;li&gt;Namespaces in operation http://lwn.net/Articles/531114&lt;/li&gt;
+  &lt;li&gt;lxc-namespace http://www.cs.ucsb.edu/~rich/class/cs290-cloud/papers/lxc-namespace.pdf&lt;/li&gt;
+  &lt;li&gt;cgroup.txt https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt&lt;/li&gt;
+  &lt;li&gt;The past, present, and future of control groups http://lwn.net/Articles/574317&lt;/li&gt;
+&lt;/ul&gt;
+
+</description>
+        <pubDate>Sat, 25 Oct 2014 00:00:00 +0800</pubDate>
+        <link>http://www.rangechow.com/2014/10/25/%E4%BB%8Edocker%E4%BA%86%E8%A7%A3linux-container.html</link>
+        <guid isPermaLink="true">http://www.rangechow.com/2014/10/25/%E4%BB%8Edocker%E4%BA%86%E8%A7%A3linux-container.html</guid>
+        
+        <category>服务端技术</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>unix共享内存要点</title>
+        <description>&lt;h3 id=&quot;section&quot;&gt;共享内存优点：&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;在进程之间不通过内核传递数据，即不通过系统调用拷贝数据，达到快速，高效的数据传输。&lt;/li&gt;
+  &lt;li&gt;随内核持续&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;*nix&lt;/code&gt;的共享内存有两套API：&lt;code class=&quot;highlighter-rouge&quot;&gt;Posix&lt;/code&gt;和&lt;code class=&quot;highlighter-rouge&quot;&gt;System V&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;两者的主要差别是共享内存的大小：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;Posix&lt;/code&gt;共享内存大小可通过函数&lt;code class=&quot;highlighter-rouge&quot;&gt;ftruncate&lt;/code&gt;随时修改&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;System V&lt;/code&gt;共享内存大小在创建时就已经确定，而且最大值根据系统有所不同&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;posix&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;Posix&lt;/code&gt;共享内存&lt;/h3&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;#include &amp;lt;sys/mman.h&amp;gt;  
+mmap，munmap，msync，shm_open，shm_unlink
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;最主要的函数&lt;code class=&quot;highlighter-rouge&quot;&gt;mmap&lt;/code&gt;&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;void* mmap(void* addr,size_t len,int prot,int flags,int fd,off_t offset)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;函数将一个句柄映射到内存中，这个句柄可以是&lt;code class=&quot;highlighter-rouge&quot;&gt;open&lt;/code&gt;的文件句柄，也可以是&lt;code class=&quot;highlighter-rouge&quot;&gt;shm_open&lt;/code&gt;的共享内存区对象。当fd=-1时为匿名共享内存。
+&lt;code class=&quot;highlighter-rouge&quot;&gt;*nix&lt;/code&gt;一切皆文件的观点，&lt;code class=&quot;highlighter-rouge&quot;&gt;shm_open&lt;/code&gt;也是在&lt;code class=&quot;highlighter-rouge&quot;&gt;/dev/shm&lt;/code&gt;目录下创建一个文件对象，返回对象的描述符。
+&lt;code class=&quot;highlighter-rouge&quot;&gt;mmap&lt;/code&gt;将句柄作为共享内存的底层支撑对象，映射到内存中，这样可以不通过&lt;code class=&quot;highlighter-rouge&quot;&gt;read&lt;/code&gt;、&lt;code class=&quot;highlighter-rouge&quot;&gt;write&lt;/code&gt;在进程之间共享内存。
+由此推测一下，在&lt;code class=&quot;highlighter-rouge&quot;&gt;*nix&lt;/code&gt;的进程间传递数据更加原始的方法是进程间读写一个文件。
+但是频繁的&lt;code class=&quot;highlighter-rouge&quot;&gt;open&lt;/code&gt;、&lt;code class=&quot;highlighter-rouge&quot;&gt;read&lt;/code&gt;、&lt;code class=&quot;highlighter-rouge&quot;&gt;write&lt;/code&gt;、&lt;code class=&quot;highlighter-rouge&quot;&gt;lseek&lt;/code&gt;系统调用会消耗过多的计算资源。
+所以想到了将这个文件句柄映射到内存中，这样就提高了进程间传递数据的效率。&lt;/p&gt;
+
+&lt;p&gt;需要注意的函数&lt;code class=&quot;highlighter-rouge&quot;&gt;msync&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;当修改了内存映射区的内存后，内核会在某个时刻将文件的内容更新。
+为了确信文件被更新，调用函数&lt;code class=&quot;highlighter-rouge&quot;&gt;msync&lt;/code&gt;。
+文件的更新可以是同步&lt;code class=&quot;highlighter-rouge&quot;&gt;MS_SYNC&lt;/code&gt;也可以是异步&lt;code class=&quot;highlighter-rouge&quot;&gt;MS_ASYNC&lt;/code&gt;。&lt;/p&gt;
+
+&lt;h3 id=&quot;system-v&quot;&gt;System V共享内存&lt;/h3&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;#include &amp;lt;sys/shm.h&amp;gt;  
+shmget,shmat,shmdt,shmctl
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;由于&lt;code class=&quot;highlighter-rouge&quot;&gt;System V&lt;/code&gt;的共享内存有大小的限制，所以可考虑，使用共享内存数组来解决这个问。
+虽然数组的大小即一个进程可以获取共享内存的数量也是有限制，但是可以缓解&lt;code class=&quot;highlighter-rouge&quot;&gt;System V&lt;/code&gt;单个共享内存过小的问题。&lt;/p&gt;
+
+</description>
+        <pubDate>Mon, 23 Jul 2012 00:00:00 +0800</pubDate>
+        <link>http://www.rangechow.com/2012/07/23/unix%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98%E8%A6%81%E7%82%B9.html</link>
+        <guid isPermaLink="true">http://www.rangechow.com/2012/07/23/unix%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98%E8%A6%81%E7%82%B9.html</guid>
+        
+        <category>计算机基础</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>erlang Receive的工作机制</title>
+        <description>&lt;p&gt;receive works as follows:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;When we enter a receive statement, we start a timer (but only if an after section is present in the expression).&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Take the first message in the mailbox and try to match it against Pattern1, Pattern2, and so on. If the match succeeds, the message is removed from the mailbox, and the expressions following the pattern are evaluated.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;If none of the patterns in the receive statement matches the first message in the mailbox, then the first message is removed from the mailbox and put into a “save queue.” The second message in the mailbox is then tried. This procedure is repeated until a matching message is found or until all the messages in the mailbox have been examined.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;If none of the messages in the mailbox matches, then the process is suspended and will be rescheduled for execution the next time a new message is put in the mailbox. Note that when a new message arrives, the messages in the save queue are not rematched; only the new message is matched.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;As soon as a message has been matched, then all messages that have been put into the save queue are reentered into the mailbox in the order in which they arrived at the process. If a timer was set, it is cleared.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;If the timer elapses when we are waiting for a message, then evaluate the expressions ExpressionsTimeout and put any saved messages back into the mailbox in the order in which they arrived at the process.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+</description>
+        <pubDate>Sun, 01 Jul 2012 00:00:00 +0800</pubDate>
+        <link>http://www.rangechow.com/2012/07/01/erlang-receive%E7%9A%84%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6.html</link>
+        <guid isPermaLink="true">http://www.rangechow.com/2012/07/01/erlang-receive%E7%9A%84%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6.html</guid>
+        
+        <category>erlang</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>strcasestr函数</title>
+        <description>&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;#define _GNU_SOURCE
+#include &amp;lt;string.h&amp;gt;
+
+char *strcasestr(const char *haystack, const char *needle);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;strcasestr&lt;/code&gt;函数用于在字符串&lt;code class=&quot;highlighter-rouge&quot;&gt;haystack&lt;/code&gt;中查找字符串&lt;code class=&quot;highlighter-rouge&quot;&gt;needle&lt;/code&gt;，忽略大小写。如果找到则返回&lt;code class=&quot;highlighter-rouge&quot;&gt;needle&lt;/code&gt;字符串在&lt;code class=&quot;highlighter-rouge&quot;&gt;haystack&lt;/code&gt;字符串中第一次出现的位置的char指针。&lt;/p&gt;
+
+&lt;p&gt;在使用中不加上&lt;code class=&quot;highlighter-rouge&quot;&gt;#define _GNU_SOURCE&lt;/code&gt;，编译时会出现&lt;code class=&quot;highlighter-rouge&quot;&gt;warning: assignment makes pointer from integer without a cast&lt;/code&gt;。&lt;/p&gt;
+
+&lt;p&gt;这是因为函数的声明在调用之后。未经声明的函数默认返回int型。&lt;/p&gt;
+
+&lt;p&gt;因此要在所有头文件之前加&lt;code class=&quot;highlighter-rouge&quot;&gt;#define _GNU_SOURCE&lt;/code&gt;，以此解决此问题。&lt;/p&gt;
+</description>
+        <pubDate>Sun, 09 Oct 2011 00:00:00 +0800</pubDate>
+        <link>http://www.rangechow.com/2011/10/09/strcasestr%E5%87%BD%E6%95%B0.html</link>
+        <guid isPermaLink="true">http://www.rangechow.com/2011/10/09/strcasestr%E5%87%BD%E6%95%B0.html</guid>
+        
+        <category>计算机基础</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>服务器高性能程序 磁盘I/O篇</title>
+        <description>&lt;p&gt;Linux IO系统的架构图&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110826-1.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;section&quot;&gt;一.设备 ——– 影响磁盘性能的因素&lt;/h3&gt;
+
+&lt;p&gt;硬盘的转速影响硬盘的整体性能。一般情况下转速越大，性能会越好。&lt;/p&gt;
+
+&lt;p&gt;硬盘的性能因素主要包括两个：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;平均访问时间&lt;/li&gt;
+  &lt;li&gt;传输速率&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;平均访问时间包括两方面因素：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;平均寻道时间(Average Seek Time)是指硬盘的磁头移动到盘面指定磁道所需的时间。一般在3ms至15ms之间。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;平均旋转等待时间(Latency)是指磁头已处于要访问的磁道，等待所要访问的扇区旋转至磁头下方的时间。一般在2ms至6ms之间。&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;传输速率(Data Transfer Rate) 硬盘的数据传输率是指硬盘读写数据的速度，单位为兆字节每秒（MB/s）。磁盘每秒能传输80M~320M字节。&lt;/p&gt;
+
+&lt;p&gt;传输速率包括内部传输速率和外部传输速率。&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;内部传输率(Internal Transfer Rate) 也称为持续传输率(Sustained Transfer Rate)，它反映了硬盘缓冲区未用时的性能。内部传输率主要依赖于硬盘的旋转速度。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;外部传输率（External Transfer Rate）也称为突发数据传输率（Burst Data Transfer Rate）或接口传输率，它标称的是系统总线与硬盘缓冲区之间的数据传输率，外部数据传输率与硬盘接口类型和硬盘缓存的大小有关。STAT2 的传输速率在300MB/s级别。&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;因此在硬件级上，提高磁盘性能的关键主要是降低平均访问时间。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-1&quot;&gt;二.设备驱动&lt;/h3&gt;
+
+&lt;p&gt;内存到硬盘的传输方式：poll，中断，DMA&lt;/p&gt;
+
+&lt;p&gt;DMA：当 CPU 初始化这个传输动作，传输动作本身是由 DMA 控制器 来实行和完成。&lt;/p&gt;
+
+&lt;p&gt;DMA控制器获得总线控制权后，CPU即刻挂起或只执行内部操作，由DMA控制器输出读写命令，直接控制RAM与I/O接口进行DMA传输。DMA每次传送的是磁盘上相邻的扇区。Scatter-gather DMA允许传送不相邻的扇区。&lt;/p&gt;
+
+&lt;p&gt;CPU性能与硬盘与内存的数据传输速率关系不大。&lt;/p&gt;
+
+&lt;p&gt;设备驱动内有一个结构管理着IO的请求队列&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;structrequest_queue（include/linux/Blkdev.h）
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;这里不仅仅有读写请求的数据块，还有用于IO调度的回调函数结构。每次需要传输的时候，就从队列中选出一个数据块交给DMA进行传输。&lt;/p&gt;
+
+&lt;p&gt;所以IO调度的回调函数这是降低平均访问的时间的关键。&lt;/p&gt;
+
+&lt;h3 id=&quot;os&quot;&gt;三.OS&lt;/h3&gt;
+
+&lt;p&gt;&lt;strong&gt;IO调度器&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;Linux kernel提供了四个调度器供用户选择。他们是noop,cfq,deadline,as。
+可以在系统启动时设置内核参数&lt;code class=&quot;highlighter-rouge&quot;&gt;elevator=&amp;lt;name&amp;gt;&lt;/code&gt;来指定默认的调度器。
+也可以在运行时为某个块设备设置IO调度程序。&lt;/p&gt;
+
+&lt;p&gt;下面来简要介绍这四个调度器的电梯调度算法。&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;Noop：最简单的调度算法。新的请求总是被添加到队头或者队尾，然后总是从队头中选出将要被处理的请求。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;CFQ：（Complete FarinessQueueing）它的目标是在所有请求的进程中平均分配IO的带宽。
+因此，它会根据进程创建自己的请求队列，然后将IO请求放入相应的队列中。在使用轮转法从每个非空的队列中取出IO请求。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Deadline：使用了四个队列，两个以磁盘块序号排序的读写队列，两个以最后期限时间排序的读写队列。
+算法首先确定下一个读写的方向，读的优先级高于写。
+然后检查被选方向的最后期限队列：如果最后期限时间的队列中有超时的请求，则将刚才的请求移动至队尾，然后在磁盘号排序队列中从超时请求开始处理。
+当处理完一个方向的请求后，在处理另一个方向的请求。（读请求的超时时间是500ms，写请求的超时时间是5s）&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Anticipatory：它是最复杂的IO调度算法。
+和deadline算法一样有四个队列。还附带了一些启发式策略。它会从当前的磁头位置后的磁盘号中选择请求。
+在调度了一个由P进程的IO请求后，会检查下一个请求，如果还是P进程的请求，则立即调度，如果不是，同时预测P进程很快会发出请求，则还延长大约7ms的时间等待P进程的IO请求。&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;strong&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;Write/Read&lt;/code&gt;函数&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;以ext3的&lt;code class=&quot;highlighter-rouge&quot;&gt;write&lt;/code&gt;为例：&lt;/p&gt;
+
+&lt;p&gt;系统调用&lt;code class=&quot;highlighter-rouge&quot;&gt;write()&lt;/code&gt;的作用就是修改页高速缓存内的一些页的内容，如果页高速缓存内没有所要的页则分配并追加这些页。&lt;/p&gt;
+
+&lt;p&gt;当脏页达到一定数量或者超时后，将脏页刷回硬盘。也可以执行相关系统调用。&lt;/p&gt;
+
+&lt;p&gt;为什么要达到一定数量，是因为延迟写能在一定层度上提高系统的性能，这也使得块设备的平均读请求会多于写请求。&lt;/p&gt;
+
+&lt;p&gt;在程序中调用&lt;code class=&quot;highlighter-rouge&quot;&gt;write&lt;/code&gt;函数，将进入系统调用&lt;code class=&quot;highlighter-rouge&quot;&gt;f_op-&amp;gt;write&lt;/code&gt;。
+这个函数将调用ext3的&lt;code class=&quot;highlighter-rouge&quot;&gt;do_sync_write&lt;/code&gt;。这个函数将参数封装后调用&lt;code class=&quot;highlighter-rouge&quot;&gt;generic_file_aio_write&lt;/code&gt;。由参数名可以看出同步写变成了异步写。
+如果没有标记&lt;code class=&quot;highlighter-rouge&quot;&gt;O_DIRECT&lt;/code&gt;，将调用函数&lt;code class=&quot;highlighter-rouge&quot;&gt;generic_file_buffered_write&lt;/code&gt;将写的内容写进kernel的高速页缓存中。Buffer是以page为单位即4k。
+之后当调用&lt;code class=&quot;highlighter-rouge&quot;&gt;cond_resched()&lt;/code&gt;进行进程的调度，DMA会将buffer中的内容写进硬盘。&lt;/p&gt;
+
+&lt;p&gt;所以当每次以4k为单位写入硬盘时效率会达到最高。下面是UNIX环境高级编程的实验结果：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110826-2.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;下图是linux 的块设备的数据操作层次：&lt;/p&gt;
+
+&lt;p&gt;Sector扇区：是设备驱动和IO调度程序处理数据粒度。&lt;/p&gt;
+
+&lt;p&gt;Block块：是VFS和文件系统处理数据的粒度。其大小不唯一，可以是512,1024,2048,4096字节。内核操作的块大小是4096字节。&lt;/p&gt;
+
+&lt;p&gt;Segment段：是DMA传送的单位。每一个段包含了相邻的扇区，它能使DMA传送不相邻的扇区。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110826-3.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;section-2&quot;&gt;四.用户程序&lt;/h3&gt;
+
+&lt;p&gt;根据以上的分析，我们的write buffer一般设置为4K的倍数。&lt;/p&gt;
+
+&lt;p&gt;在程序中有意识的延迟写。这个是os的策略，当然也可以应用到程序的设计中。
+当然也会有缺点：1.如果硬件错误或掉电，则会丢失内容（做额外的备份）2.需要额外的内存空间。（牺牲内存来提高IO的效率）&lt;/p&gt;
+
+&lt;p&gt;我们还需根据系统的IO调度器的调度策略，设计出不同的IO策略。尽量降低磁盘的平均访问时间，降低请求队列，提高数据传输的速率。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-3&quot;&gt;五.监控硬盘的工具和指标&lt;/h3&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Iostat–x –k 1
+
+-x : 显示更多的消息 
+-k : 数据以KB为单位 
+1 : 每秒显示一次输出显示的信息
+
+Iowait：cpu等待未完成的IO请求而空闲的时间的比例。
+
+Idle：cpu空闲且无IO请求的比例。
+
+rrqm/s：每秒这个设备相关的读取请求有多少被Merge了。
+
+wrqm/s：每秒这个设备相关的写入请求有多少被Merge了。
+
+rsec/s：每秒读取的扇区数；
+
+wsec/：每秒写入的扇区数。
+
+r/s：每秒完成的读 I/O 设备次数。即 delta(rio)/s
+
+w/s：每秒完成的写 I/O 设备次数。即 delta(wio)/s
+
+await：每一个IO请求的处理的平均时间（单位是毫秒）。包括加入请求队列和服务的时间。
+
+svctm：平均每次设备I/O操作的服务时间。
+
+avgrq-sz: 平均每次设备I/O操作的数据大小 (扇区)。即 delta(rsect+wsect)/delta(rio+wio)
+
+avgqu-sz: 平均I/O队列长度。即 delta(aveq)/s/1000 (因为aveq的单位为毫秒)。
+
+%util：在统计时间内所有处理IO时间，除以总共统计时间。
+例如，如果统计间隔1秒，该设备有0.8秒在处理IO，而0.2秒闲置，那么该设备的%util = 0.8/1 = 80%，所以该参数暗示了设备的繁忙程度。
+一般地，如果该参数是100%表示设备已经接近满负荷运行了（当然如果是多磁盘，即使%util是100%，因为磁盘的并发能力，所以磁盘使用未必就到了瓶颈）。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;下面我们做一个实验来分析一下&lt;/p&gt;
+
+&lt;p&gt;我们使用命令&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;time dd if=/dev/zero of=/home/zhouyuan/mytest bs=1M count=3000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;向mytest写入数据，写入3G。&lt;/p&gt;
+
+&lt;p&gt;截取部分的状态监控：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110826-4.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110826-5.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110826-6.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;如图2，当两条数据 iowait 达到了 99% 以上，写入的数据是0，这是因为DMA将内存的中的数据传输给设备。结合图1的前两条数据，利用率达到了99%+却没有写入的磁盘块。&lt;/p&gt;
+
+&lt;p&gt;如图3，iowait下降，说明cpu开始执行相关程序，而此时块设备开始写入的数据。这两个操作是异步进行的。&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Vmstat–k –n 1
+
+Swap
+
+    si: 从磁盘交换到内存的交换页数量，单位：KB/秒
+
+    so: 从内存交换到磁盘的交换页数量，单位：KB/秒
+
+IO
+
+    bi: 从块设备接受的块数，单位：块/秒
+
+    bo: 发送到块设备的块数，单位：块/秒
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110826-7.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110826-8.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;从图中我们可以看出系统的延迟写。&lt;/p&gt;
+
+</description>
+        <pubDate>Fri, 26 Aug 2011 00:00:00 +0800</pubDate>
+        <link>http://www.rangechow.com/2011/08/26/%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%AB%98%E6%80%A7%E8%83%BD%E7%A8%8B%E5%BA%8F-%E7%A3%81%E7%9B%98i-o%E7%AF%87.html</link>
+        <guid isPermaLink="true">http://www.rangechow.com/2011/08/26/%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%AB%98%E6%80%A7%E8%83%BD%E7%A8%8B%E5%BA%8F-%E7%A3%81%E7%9B%98i-o%E7%AF%87.html</guid>
+        
+        <category>服务端技术</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>NAT学习</title>
+        <description>&lt;p&gt;The IP Network Address Translator，IP网络地址转换是人们说的NAT，或者说NA(P)T。
+NAT是为了解决IPv4地址不足而提出来得一种替代方案，可以对外界屏蔽内部的网络拓扑。
+随着网络的发展，NAT阻碍了构建在覆盖网络的P2P程序的发展。
+因为覆盖网络是构建在应用层，屏蔽了传输层以下的网络拓扑，网络中的每一个节点或某些节点有此网络的路由表，由这些路由表构建出这个覆盖网络，但是NAT阻碍的覆盖网络中节点的连接。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110715-1.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;上图显示了NAT的原理。
+NAT将内网的IP替换为公网IP，将端口映射为公网的端口。
+公网IP替换内网IP是固定的，NAT的不足之处在于端口的替换。
+因为NAT还没有形成标准，替换策略有几种，这也是NAT行为的关键。&lt;/p&gt;
+
+&lt;p&gt;在《Behavior and Classification of NAT Devices and Implications for NAT Traversal》一文中就把端口映射的行为分成四种，其中包括保留端口，不保留端口，端口重载，端口复用。
+这四种分类最终区分了NAT的四种类型即Full cone NAT，Symmetric NAT，Port-Restrictes cone NAT ，Address-Restriced cone NAT。&lt;/p&gt;
+
+&lt;p&gt;为了使覆盖网络中的节点相互通信，我们需要进行NAT穿越。在《A NAT Traversal Mechanism for Peer-To-Peer Networks》一文种介绍了根据两端不同的NAT类型对应的四种NAT穿越方案。如下图&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110715-2.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;这些解决方案都需要STUN（Simple Traversal of User Datagram Protocol through Network Address Translators (NATs)，NAT的UDP简单穿越）协议帮助。
+STUN协议要求一台具有公网IP的主机帮助一台主机进行NAT类型的判断。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/img/20110715-3.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;上图是STUN协议的流程，其主要的思想是通过STUN的回射来判断主机的NAT类型。&lt;/p&gt;
+
+&lt;p&gt;除了直接连接，反向连接、打洞和依赖都需要第三台主机的帮助。
+在《Characterization and Measurement of TCP Traversal through NATs and Firewalls》一文中介绍了TCP穿越的方法。
+在STUNT#2方法中，第三台主机和两台需要连接的主机都有长连接，当一方需要发起来连接时，向第三台主机发请求，第三台主机向被请求的主机发送邀请，此时需要连接的主机都向对方发送SYN包，此时双方的防火墙都有了洞，只要有一方的SYN包到达对方主机，连接就会被建立。
+Relay方法需要耗费的代价太大，在P2P应用中一般会消极的处理双方都是对称NAT的情况。&lt;/p&gt;
+
+</description>
+        <pubDate>Fri, 15 Jul 2011 00:00:00 +0800</pubDate>
+        <link>http://www.rangechow.com/2011/07/15/nat%E5%AD%A6%E4%B9%A0.html</link>
+        <guid isPermaLink="true">http://www.rangechow.com/2011/07/15/nat%E5%AD%A6%E4%B9%A0.html</guid>
+        
+        <category>网络</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>#pragma pack学习</title>
+        <description>&lt;p&gt;最近调试网络的服务端程序，自己写了一个小客户端程序来测试，发现服务程序解包错误。
+经调试发现客户端的协议头大小和服务器端的协议头大 小不一致。
+原因是服务器端加了&lt;code class=&quot;highlighter-rouge&quot;&gt;#pragma pack(1)&lt;/code&gt;,而客户端没加。&lt;/p&gt;
+
+&lt;p&gt;之前没接触过这个编译宏，现在来认真学习之。首先google之~~&lt;/p&gt;
+
+&lt;p&gt;原来#pragma pack有几种形式，我所接触到的是&lt;code class=&quot;highlighter-rouge&quot;&gt;#pragma pack(n)&lt;/code&gt;，即变量以n字节对齐。
+变量对齐在每个系统中是不一样的，默认的对齐方式能有效的提高cpu取指取数的速度，但是可能会浪费一定的空间。
+在网络程序中采用&lt;code class=&quot;highlighter-rouge&quot;&gt;#pragma pack(1)&lt;/code&gt;,即变量紧缩，不但可以减少网络流量，还可以兼容各种系统，不会因为系统对齐方式不同而导致解包错误。&lt;/p&gt;
+
+&lt;p&gt;了解了概念和优点，现在我们就来测试之~&lt;/p&gt;
+
+&lt;p&gt;平台：CPU—Pentium E5700 内存—2G&lt;/p&gt;
+
+&lt;p&gt;操作系统：&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;ubuntu 11.04 32bit   编译器：G++ 4.5.2&lt;/li&gt;
+  &lt;li&gt;windows xp           编译器：VS2010&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;先看第一个测试:结构体在正常情况和紧缩情况在以上不同环境下占用的内存大小。&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct pack {
+    int i;
+    short s;
+    double d;
+    char c;
+    short f;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;测试结果为：&lt;/p&gt;
+
+&lt;p&gt;1：
+&lt;img src=&quot;/img/20110715-4.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;2：
+&lt;img src=&quot;/img/20110715-5.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;测试结果分析：&lt;/p&gt;
+
+&lt;p&gt;可以看出紧缩后结构体的大小为15，是结构体内置类型大小的和。
+但是在默认情况下，结构体的大小都是对齐字节数的倍数。
+ubuntu下pack只需要20个字节，而windows要24个字节。
+这是因为ubuntu是以4字节对齐，而windows则是以最大的内置类型的字节数对齐，在结构体内最大的内置类型为double，其大小为8个字节。
+他们在内存中的对齐方式如下图：&lt;/p&gt;
+
+&lt;p&gt;1：
+&lt;img src=&quot;/img/20110715-6.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;2：
+&lt;img src=&quot;/img/20110715-7.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;还需注意的是，在对齐类型的内部都是以2字节对齐的。&lt;/p&gt;
+
+&lt;p&gt;结论：在默认情况下，linux操作系统是以4字节对齐，windows操作系统则是以最大的内置类型对齐。&lt;/p&gt;
+
+&lt;p&gt;第二个测试&lt;/p&gt;
+
+&lt;p&gt;一个结构体内包含另外一个结构体，其大小的情况。&lt;/p&gt;
+
+&lt;p&gt;内部的结构体为:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct pack {
+    short s;
+    double d;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;外部的结构体为&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct complex _pack{
+    char c;
+    struct pack s;
+    double d;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;我们有四种情况：
+1.  pack紧缩，complex _pack紧缩
+2.  pack紧缩，complex _pack默认
+3.  pack默认，complex _pack紧缩
+4.  pack默认，complex _pack默认&lt;/p&gt;
+
+&lt;p&gt;以下的排列均按此顺序。测试的结果:&lt;/p&gt;
+
+&lt;p&gt;1：
+&lt;img src=&quot;/img/20110715-8.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;2：
+&lt;img src=&quot;/img/20110715-9.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;测试结果分析：&lt;/p&gt;
+
+&lt;p&gt;在两个操作系统下，除了第一种情况—-内结构体和外结构体都紧缩—-相同之外，其他三种情况都不相同。
+我们可以根据偏移画出结构体在内存中的情况。第一种情况省略。&lt;/p&gt;
+
+&lt;p&gt;1：
+&lt;img src=&quot;/img/20110715-10.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;2：
+&lt;img src=&quot;/img/20110715-11.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;结论：#pragma pack只影响当前结构体的变量的对齐情况，并不会影响结构体内部的结构体变量的排列情况。
+或者说#pragma pack的作用域只是一层。
+我们由第三种情况，内部结构体正常，外部结构体紧缩，可以得出结构体的对齐是按偏移计算的。&lt;/p&gt;
+
+&lt;p&gt;这里还有一个问题没解决，为什么第二种情况内部结构体的偏移都是1?不是4或者8？&lt;/p&gt;
+
+</description>
+        <pubDate>Fri, 15 Jul 2011 00:00:00 +0800</pubDate>
+        <link>http://www.rangechow.com/2011/07/15/pragma-pack%E5%AD%A6%E4%B9%A0.html</link>
+        <guid isPermaLink="true">http://www.rangechow.com/2011/07/15/pragma-pack%E5%AD%A6%E4%B9%A0.html</guid>
+        
+        <category>计算机基础</category>
+        
+        
+      </item>
+    
+  </channel>
+</rss>
