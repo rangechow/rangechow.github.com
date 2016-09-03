@@ -51,7 +51,7 @@ docker的使用模式和eucalyptus、EC2类似。
 每个container只包含应用程序和它的依赖，运行在隔离的用户态环境中，和其他容器共享操作系统的资源。
 因此container不但有VM的资源隔离和分配的优点，而且有更高的效率。
  
-### irtual Container如何实现？ 
+### Virtual Container如何实现？ 
  
 **namespace**
  
@@ -181,13 +181,13 @@ Virtual Container能不能取代Virtual Machine有待观察，仅仅靠docker、
 
 *4.[linuxcontainers.org](https://linuxcontainers.org)*
 
-*5.[<Namespaces in operation>](http://lwn.net/Articles/531114)*
+*5.[ <Namespaces in operation> ](http://lwn.net/Articles/531114)*
 
-*6.[<lxc-namespace>](http://www.cs.ucsb.edu/~rich/class/cs290-cloud/papers/lxc-namespace.pdf)*
+*6.[ <lxc-namespace> ](http://www.cs.ucsb.edu/~rich/class/cs290-cloud/papers/lxc-namespace.pdf)*
 
 *7.[cgroup.txt](https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt)*
 
-*8.[<The past, present, and future of control groups>](http://lwn.net/Articles/574317)*
+*8.[ <The past, present, and future of control groups> ](http://lwn.net/Articles/574317)*
 
 
 
