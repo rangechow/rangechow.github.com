@@ -8,7 +8,7 @@ tags: 服务端技术
  
  
  
-## 什么是docker？
+### 什么是docker？
  
 
 docker是为研发和运维搭建的构建、迁移、运行分布式程序的平台，能快速的搭建分布式系统，消除研发，测试和生产环境的差异。docker包含两大组件
@@ -34,16 +34,16 @@ docker的使用模式和eucalyptus、EC2类似，首先在一台物理机器部�
  
  
  
-##Virtual Machine与Virtual Container的区别？ 
+### Virtual Machine与Virtual Container的区别？ 
  
  
-### Virtual Machine ##
+##Virtual Machine##
  
 ![]({{site.baseurl}}/img/3.png)
  
 每个instance至少包含数GB，磁盘利用率低。启动instance时，先要启动ghost os，启动耗时较长。优点是完整的环境隔离。
  
-### Virtual Container ###
+##Virtual Container##
  
 ![]({{site.baseurl}}/img/4.png)
  
@@ -51,10 +51,10 @@ docker的使用模式和eucalyptus、EC2类似，首先在一台物理机器部�
  
  
  
-##Virtual Container如何实现？ 
+### irtual Container如何实现？ 
  
  
-### namespace ###
+##namespace##
  
 namespace是轻量级的进程虚拟化。主要的开发人员是 Eric Biederman，第一阶段的用户态namespace已经合入了linux 2.6.23。从linux 3.8开始，非root权限的进程可以创建自己的用户态namespace，从而获得对应完整的root权限。目前实现了六种namespace，包括
  
@@ -142,7 +142,7 @@ kernel会根据相应的标记来设置**struct nsproxy**的值
 
  
  
-### cgroup ###
+##cgroup##
  
  
 cgroup提供了聚合和划分进程和他们的子进程到不同等级的进程组里的机制。cgroup的思想很简单，即划分进程到不同等级的进程组里，然后给这些进程组提供独立的系统资源。这项目由google的工程师Paul Menage和Rohit Seth发起，现在的维护者是Li Zefan和Tehun Heo。ps.Li Zefan是华为的工程师喔！
@@ -170,7 +170,7 @@ cgroup提供了聚合和划分进程和他们的子进程到不同等级的进�
 从实现来看，cgroup是一种虚拟的文件系统(VFS)。cgroup的信息是随内核存在，当系统重启，所有的cgroup信息将被删除。
  
  
-### LXC ###
+##LXC##
  
  
 LXC(linux containers)是linux kernel容器特性的用户态接口， 它集成了多个kernel的特性，包括
@@ -188,22 +188,28 @@ LXC(linux containers)是linux kernel容器特性的用户态接口， 它集成�
    
    
    
-##总结     
+###	总结     
     
 docker是基于LXC采用go语言编写的服务。docker已经构建出类似EC2从构建，迁移，存储，分发的一整套服务。docker的创始人Solomon Hykes甚至宣称，docker能将互联网升级至下一代。这里的互联网应该特指云计算。因为google基础架构部副总裁也说，我们和docker联手，把容器技术打造为所有云应用的基石。我打开docker的github，发现docker完全由go编写，确实震惊的好一会，我猜想这也是为什么docker能等到google这种大厂商支持的原因之一。Virtual Container能不能取代Virtual Machine有待观察，仅仅靠docker、google的力量远远不够，但基于进程的资源隔离比基于内核的资源隔离在粒度级别更低的层级控制资源，发挥物理机器的性能，这一点来说已经有足够的优势。    
         
    
-##参考文献    
-
-
+*参考文献*   
       
-* linux kernel 3.18
-* linux kernel 2.6.32
-* docker https://www.docker.com
-* lxc https://linuxcontainers.org
-* Namespaces in operation http://lwn.net/Articles/531114
-* lxc-namespace http://www.cs.ucsb.edu/~rich/class/cs290-cloud/papers/lxc-namespace.pdf
-* cgroup.txt https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt
-* The past, present, and future of control groups http://lwn.net/Articles/574317
+*1.linux kernel 3.18*
+
+*2.linux kernel 2.6.32*
+
+*3.[docker](https://www.docker.com)*
+
+*4.[lxc](https://linuxcontainers.org)*
+
+*5.[Namespaces in operation](http://lwn.net/Articles/531114)*
+
+*6.[lxc-namespace](http://www.cs.ucsb.edu/~rich/class/cs290-cloud/papers/lxc-namespace.pdf)*
+
+*7.[cgroup.txt](https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt)*
+
+*8.[The past, present, and future of control groups](http://lwn.net/Articles/574317)*
+
 
 
