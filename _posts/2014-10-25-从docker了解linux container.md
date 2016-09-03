@@ -181,9 +181,9 @@ Virtual Container能不能取代Virtual Machine有待观察，仅仅靠docker、
 
 *4.[linuxcontainers.org](https://linuxcontainers.org)*
 
-*5.[ <Namespaces in operation> ](http://lwn.net/Articles/531114)*
+*5.[ \<Namespaces in operation\> ](http://lwn.net/Articles/531114)*
 
-*6.[ <lxc-namespace> ](http://www.cs.ucsb.edu/~rich/class/cs290-cloud/papers/lxc-namespace.pdf)*
+*6.[ \<lxc-namespace\> ](http://www.cs.ucsb.edu/~rich/class/cs290-cloud/papers/lxc-namespace.pdf)*
 
 *7.[cgroup.txt](https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt)*
 
